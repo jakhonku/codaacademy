@@ -1,26 +1,138 @@
+/* ============================================
+   GLOBAL STILLAR (globals.css)
+   ============================================
+   Bu fayl butun loyihaga tegishli umumiy stillarni belgilaydi.
+   Tailwind CSS import qilinadi va maxsus ranglar,
+   shriftlar va animatsiyalar shu yerda sozlanadi.
+   ============================================ */
+
+/* Tailwind CSS'ni import qilish — bu barcha Tailwind klasslarini faollashtiradi */
 @import "tailwindcss";
 
+/* ============================================
+   MAXSUS RANGLAR VA O'ZGARUVCHILAR
+   ============================================
+   :root ichida CSS o'zgaruvchilari (custom properties) belgilanadi.
+   Bu o'zgaruvchilarni istalgan joyda ishlatish mumkin.
+   ============================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Asosiy fon rangi — issiq krem rang, ko'zni charchatmaydi */
+  --background: #FFFBF5;
+  /* Asosiy matn rangi — to'q indigo */
+  --foreground: #1E1B4B;
 }
 
+/* ============================================
+   TAILWIND THEME SOZLAMALARI
+   ============================================
+   @theme inline orqali Tailwind CSS'ga maxsus ranglar
+   va shriftlarni qo'shamiz. Bu ranglar Tailwind klasslarida
+   ishlatiladi (masalan: bg-background, text-foreground).
+   ============================================ */
 @theme inline {
+  /* Tailwind uchun fon va matn ranglari */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* Asosiy rang (indigo) — tugmalar va aksentlar uchun */
+  --color-primary: #4F46E5;
+  --color-primary-light: #6366F1;
+  --color-primary-dark: #3730A3;
+
+  /* Ikkilamchi rang (oltin/amber) — ta'kidlash uchun */
+  --color-accent: #F59E0B;
+  --color-accent-light: #FBBF24;
+
+  /* Krem fon ranglari */
+  --color-cream: #FFFBF5;
+  --color-cream-dark: #FFF7ED;
+
+  /* Kulrang ranglar — yordamchi matn va chegaralar uchun */
+  --color-muted: #6B7280;
+  --color-muted-light: #9CA3AF;
+  --color-border: #E5E7EB;
+
+  /* Shriftlar */
+  --font-sans: 'Inter', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ============================================
+   UMUMIY BODY STILI
+   ============================================ */
+body {
+  /* Fon rangini qo'llash */
+  background: var(--background);
+  /* Matn rangini qo'llash */
+  color: var(--foreground);
+  /* Inter shriftini ishlatish */
+  font-family: 'Inter', sans-serif;
+}
+
+/* ============================================
+   SILLIQ SKROLL (Smooth Scrolling)
+   ============================================
+   Sahifa ichidagi havolalarga bosganda
+   sahifa sekin va silliq aylanadi.
+   ============================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ============================================
+   MAXSUS ANIMATSIYALAR
+   ============================================
+   Elementlarning paydo bo'lish animatsiyalari.
+   ============================================ */
+
+/* Pastdan yuqoriga siljish animatsiyasi */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Chapdan o'ngga siljish animatsiyasi */
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
+
+/* Sekin pulsatsiya animatsiyasi — diqqatni tortish uchun */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Animatsiya klasslari — istalgan elementga qo'shish mumkin */
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-fade-in-left {
+  animation: fadeInLeft 0.6s ease-out forwards;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+/* Animatsiya kechikishlari — kartochkalar ketma-ket paydo bo'lishi uchun */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
