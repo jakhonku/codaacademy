@@ -50,6 +50,7 @@ export default function Navbar() {
     { name: "Bosh sahifa", href: "/" },
     { name: "Promptlar", href: "/prompts" },
     { name: "Resurslar", href: "/resources" },
+    { name: "Maqolalar", href: "/prompt-engineering" },
   ];
 
   return (

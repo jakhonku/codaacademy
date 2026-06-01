@@ -93,6 +93,41 @@ const prompts = [
     promptText:
       "Menga [TADBIR TURI: kontsert/master-klass/festival] uchun dastur tuzing. Ma'lumotlar: 1) Davomiyligi: [SOAT] soat, 2) Ishtirokchilar soni: [SONI], 3) Tinglovchilar: [KIMLAR], 4) Mavzu: [MAVZU]. Dasturda tanaffuslar va tartib bo'lsin.",
   },
+  {
+    id: 10,
+    title: "AI yordamida kod refaktor",
+    category: "Ta'lim",
+    description: "Kod refaktoring uchun prompt, kodni optimallashtirish, xavfsizligini oshirish",
+    promptText: "Menga [KOD] kodini refaktor qiling, optimal struktura, o'qish osonligi va samaradorlikka e'tibor bering. Har qanday keraksiz kodni olib tashlang. Qo'shimcha izohlar bilan tushuntiring."
+  },
+  {
+    id: 11,
+    title: "Musiqa kompozitsiyasi yaratish",
+    category: "Musiqa",
+    description: "Yangi musiqa asari yaratish uchun prompt",
+    promptText: "Menga [JANR] uslubida, [MIDI] melodiya bilan 2 daqiqalik instrumental trek yarating. Asboblar: piano, synth, drum. Fon qisqa tasvir, dinamik o'zgarishlar bilan."
+  },
+  {
+    id: 12,
+    title: "Prezentatsiya slaydlarini yaratish",
+    category: "Prezentatsiya",
+    description: "Ta'lim yoki biznes prezentatsiyasi uchun slayd kontenti",
+    promptText: "Menga [MAVZU] bo'yicha 10 slaydli prezentatsiya rejasini yozing. Har bir slayd uchun sarlavha, asosiy nuqtalar, vizual tavsiya (rasm, diagramma)."
+  },
+  {
+    id: 13,
+    title: "Biznes email yozish",
+    category: "Kommunikatsiya",
+    description: "Professional biznes email yaratish",
+    promptText: "Menga [MAQSAD] uchun professional email yozing. Email [QABULQILUVCHINING ISMI] ga yo'naltirilgan, rasmiy ohangda, qisqa va aniq."
+  },
+  {
+    id: 14,
+    title: "Texnologiya tendensiyalarini tahlil qilish",
+    category: "Texnologiya",
+    description: "So'nggi texnologik trendlar haqida tavsif",
+    promptText: "2026-yil uchun AI, blockchain, quantum computing sohalaridagi eng muhim texnologik tendensiyalarni 5 ta punktda qisqacha tavsiflang, har birining ta'siri va imkoniyatlarini ko'rsating."
+  }
 ];
 
 /* Barcha kategoriyalarni olish — filtrlash uchun kerak bo'ladi */
