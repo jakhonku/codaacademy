@@ -22,8 +22,7 @@ import staticPrompts from "@/data/prompts";
 import { supabase } from "@/lib/supabase";
 
 import Link from "next/link";
-import { ArrowRight, Send, CheckCircle, AlertCircle } from "lucide-react";
-import { CalendarSticker, MapPinSticker, ClockSticker } from "@/components/StickerIcons";
+import { ArrowRight, Send, CheckCircle, AlertCircle, Calendar, MapPin, Clock } from "lucide-react";
 
 export default function HomePage() {
   // Holatlar (States)
@@ -146,27 +145,33 @@ export default function HomePage() {
           {/* Dars haqida ma'lumot kartochkalari */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
             {/* Karta 1: Dars mazmuni */}
-            <div className="bg-cream/40 border border-border/60 rounded-3xl p-8 hover:shadow-xl transition-all duration-300 flex flex-col items-start">
-              <CalendarSticker className="w-16 h-16 mb-6" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Mashg'ulotlar Dasturi</h3>
+            <div className="bg-white border border-border/40 rounded-3xl p-8 hover:shadow-xl hover:border-primary/20 transition-all duration-300 flex flex-col items-start group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <Calendar className="w-6 h-6 stroke-[1.5]" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors duration-300">Mashg'ulotlar Dasturi</h3>
               <p className="text-muted text-sm leading-relaxed">
                 Seminar davomida siz dars rejalari tuzish, test savollari yaratish va musiqiy tahlil qilish uchun ChatGPT hamda maxsus AI-musiqa vositalari bilan amaliy ishlaysiz.
               </p>
             </div>
 
             {/* Karta 2: Joylashuv va Vaqt */}
-            <div className="bg-cream/40 border border-border/60 rounded-3xl p-8 hover:shadow-lg transition-all duration-300 flex flex-col items-start">
-              <MapPinSticker className="w-16 h-16 mb-6" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Mashg'ulot Joyi</h3>
+            <div className="bg-white border border-border/40 rounded-3xl p-8 hover:shadow-xl hover:border-primary/20 transition-all duration-300 flex flex-col items-start group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <MapPin className="w-6 h-6 stroke-[1.5]" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors duration-300">Mashg'ulot Joyi</h3>
               <p className="text-muted text-sm leading-relaxed">
                 Darslar zamonaviy texnologiyalar va kerakli asbob-uskunalar bilan jihozlangan maxsus xonalarda haftalik tartibda tashkil etiladi.
               </p>
             </div>
 
             {/* Karta 3: Vaqt */}
-            <div className="bg-cream/40 border border-border/60 rounded-3xl p-8 hover:shadow-lg transition-all duration-300 flex flex-col items-start">
-              <ClockSticker className="w-16 h-16 mb-6" />
-              <h3 className="text-xl font-bold text-foreground mb-3">Vaqti va Sharoit</h3>
+            <div className="bg-white border border-border/40 rounded-3xl p-8 hover:shadow-xl hover:border-primary/20 transition-all duration-300 flex flex-col items-start group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <Clock className="w-6 h-6 stroke-[1.5]" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors duration-300">Vaqti va Sharoit</h3>
               <p className="text-muted text-sm leading-relaxed">
                 Mashg'ulotlar har shanba kuni soat 14:00 da boshlanadi. Har bir ishtirokchi shaxsiy kompyuter va internet tarmog'i bilan ta'minlanadi.
               </p>

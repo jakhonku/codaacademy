@@ -10,8 +10,7 @@
    ============================================ */
 
 import Link from "next/link";
-import { ArrowRight, Users } from "lucide-react";
-import { UsersSticker, LightbulbSticker, MusicSticker } from "./StickerIcons";
+import { ArrowRight, Users, GraduationCap, Terminal, BookOpen } from "lucide-react";
 
 export default function Hero() {
   return (
@@ -77,24 +76,30 @@ export default function Hero() {
           {/* Statistika */}
           <div className="mt-16 grid grid-cols-3 gap-8 max-w-md mx-auto animate-fade-in-up" style={{ animationDelay: '0.5s', opacity: 0 }}>
             {/* Oflayn mashg'ulotlar */}
-            <div className="flex flex-col items-center text-center">
-              <UsersSticker className="w-12 h-12 mb-2" />
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <GraduationCap className="w-6 h-6 stroke-[1.5]" />
+              </div>
               <span className="text-2xl md:text-3xl font-bold text-foreground">5+</span>
-              <span className="text-sm text-muted mt-1">Oflayn Guruhlar</span>
+              <span className="text-xs font-semibold text-muted uppercase tracking-wider mt-1">Oflayn Guruhlar</span>
             </div>
 
             {/* Promptlar */}
-            <div className="flex flex-col items-center text-center">
-              <LightbulbSticker className="w-12 h-12 mb-2" />
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <Terminal className="w-6 h-6 stroke-[1.5]" />
+              </div>
               <span className="text-2xl md:text-3xl font-bold text-foreground">9+</span>
-              <span className="text-sm text-muted mt-1">Tayyor Promptlar</span>
+              <span className="text-xs font-semibold text-muted uppercase tracking-wider mt-1">Tayyor Promptlar</span>
             </div>
 
             {/* Resurslar */}
-            <div className="flex flex-col items-center text-center">
-              <MusicSticker className="w-12 h-12 mb-2" />
+            <div className="flex flex-col items-center text-center group">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
+                <BookOpen className="w-6 h-6 stroke-[1.5]" />
+              </div>
               <span className="text-2xl md:text-3xl font-bold text-foreground">6+</span>
-              <span className="text-sm text-muted mt-1">AI Qo'llanmalar</span>
+              <span className="text-xs font-semibold text-muted uppercase tracking-wider mt-1">AI Qo'llanmalar</span>
             </div>
           </div>
 
