@@ -89,7 +89,7 @@ export default function Hero() {
               <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-sm border border-primary/10">
                 <Terminal className="w-6 h-6 stroke-[1.5]" />
               </div>
-              <span className="text-2xl md:text-3xl font-bold text-foreground">9+</span>
+              <span className="text-2xl md:text-3xl font-bold text-foreground">14+</span>
               <span className="text-xs font-semibold text-muted uppercase tracking-wider mt-1">Tayyor Promptlar</span>
             </div>
 
