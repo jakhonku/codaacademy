@@ -36,7 +36,15 @@ import {
   ChevronRight,
   Upload,
   UploadCloud,
-  X
+  X,
+  UserCircle,
+  ClipboardList,
+  MessageSquare,
+  CalendarDays,
+  Send,
+  Mail,
+  Clock,
+  MapPin
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -46,18 +54,34 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState("");
 
   // Ma'lumotlar holati
-  const [activeTab, setActiveTab] = useState("prompts"); // "prompts" | "resources" | "registrations"
+  const [activeTab, setActiveTab] = useState("prompts"); // "prompts" | "resources" | "registrations" | "users" | "tasks" | "messages" | "lessons"
   const [prompts, setPrompts] = useState([]);
   const [resources, setResources] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [users, setUsers] = useState([]);          // Google orqali ro'yxatdan o'tganlar
+  const [userTasks, setUserTasks] = useState([]);  // Foydalanuvchi vazifalari
+  const [userMessages, setUserMessages] = useState([]); // Foydalanuvchi xabarlari
+  const [lessons, setLessons] = useState([]);      // Dars jadvali
   const [loading, setLoading] = useState(true);
 
   // Modal / Tahrirlash holati
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({ id: null, title: "", category: "Ta'lim", description: "", promptText: "" });
-  
+
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
   const [currentResource, setCurrentResource] = useState({ id: null, title: "", description: "", type: "pdf", url: "", fileSize: "", parentId: null });
+
+  // Vazifa modali
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [currentTask, setCurrentTask] = useState({ id: null, userId: "", title: "", description: "", dueDate: "" });
+
+  // Xabar modali
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [currentMessage, setCurrentMessage] = useState({ id: null, userId: "", subject: "", body: "" });
+
+  // Dars modali
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [currentLesson, setCurrentLesson] = useState({ id: null, title: "", description: "", scheduledAt: "", durationMinutes: 60, location: "", meetingLink: "" });
 
   const [notification, setNotification] = useState(null); // { type: 'success'|'error', text: '' }
 
@@ -141,6 +165,83 @@ export default function AdminPage() {
           })));
         } else {
           setRegistrations([]);
+        }
+
+        // 4. Google orqali ro'yxatdan o'tgan foydalanuvchilar
+        //    auth.users dan to'g'ridan-to'g'ri o'qish uchun server API
+        //    ishlatamiz (service_role kalit talab qilinadi).
+        try {
+          const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+          const res = await fetch("/api/admin/users", {
+            headers: { "x-admin-password": adminPwd },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            setUsers(json.users || []);
+          } else {
+            console.error("Foydalanuvchilarni olishda xato:", await res.text());
+            setUsers([]);
+          }
+        } catch (e) {
+          console.error("API xatosi:", e);
+          setUsers([]);
+        }
+
+        // 5. Foydalanuvchi vazifalari
+        const { data: tData, error: tErr } = await supabase
+          .from("user_tasks")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!tErr && tData) {
+          setUserTasks(tData.map(t => ({
+            id: t.id,
+            userId: t.user_id,
+            title: t.title,
+            description: t.description,
+            dueDate: t.due_date,
+            isCompleted: t.is_completed,
+            createdAt: t.created_at,
+          })));
+        } else {
+          setUserTasks([]);
+        }
+
+        // 6. Foydalanuvchi xabarlari
+        const { data: mData, error: mErr } = await supabase
+          .from("user_messages")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!mErr && mData) {
+          setUserMessages(mData.map(m => ({
+            id: m.id,
+            userId: m.user_id,
+            subject: m.subject,
+            body: m.body,
+            isRead: m.is_read,
+            createdAt: m.created_at,
+          })));
+        } else {
+          setUserMessages([]);
+        }
+
+        // 7. Dars jadvali
+        const { data: lData, error: lErr } = await supabase
+          .from("lessons")
+          .select("*")
+          .order("scheduled_at", { ascending: true });
+        if (!lErr && lData) {
+          setLessons(lData.map(l => ({
+            id: l.id,
+            title: l.title,
+            description: l.description,
+            scheduledAt: l.scheduled_at,
+            durationMinutes: l.duration_minutes,
+            location: l.location,
+            meetingLink: l.meeting_link,
+            createdAt: l.created_at,
+          })));
+        } else {
+          setLessons([]);
         }
       } catch (err) {
         console.error("Supabase ma'lumotlarni yuklashda xatolik:", err);
@@ -236,6 +337,163 @@ export default function AdminPage() {
       setPrompts(prev => prev.filter(p => p.id !== id));
       showNotice("Prompt o'chirildi (Lokal)");
     }
+  };
+
+  // ============================================
+  // VAZIFA AMALLARI (CRUD)
+  // ============================================
+  const saveTask = async (e) => {
+    e.preventDefault();
+    if (!supabase) {
+      showNotice("Supabase sozlanmagan", "error");
+      return;
+    }
+    const isEdit = currentTask.id !== null;
+    try {
+      const payload = {
+        user_id: currentTask.userId || null, // bo'sh bo'lsa BARCHA foydalanuvchilarga
+        title: currentTask.title,
+        description: currentTask.description,
+        due_date: currentTask.dueDate || null,
+      };
+      if (isEdit) {
+        const { error } = await supabase.from("user_tasks").update(payload).eq("id", currentTask.id);
+        if (error) throw error;
+        showNotice("Vazifa yangilandi.");
+      } else {
+        const { error } = await supabase.from("user_tasks").insert([payload]);
+        if (error) throw error;
+        showNotice(currentTask.userId ? "Vazifa yuborildi." : "Vazifa barcha foydalanuvchilarga yuborildi.");
+      }
+      loadAllData();
+      setIsTaskModalOpen(false);
+    } catch (err) {
+      console.error("Vazifa saqlashda xato:", err);
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const deleteTask = async (id) => {
+    if (!confirm("Haqiqatan ham ushbu vazifani o'chirishni xohlaysizmi?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("user_tasks").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Vazifa o'chirildi.");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  // ============================================
+  // XABAR AMALLARI (CRUD)
+  // ============================================
+  const saveMessage = async (e) => {
+    e.preventDefault();
+    if (!supabase) {
+      showNotice("Supabase sozlanmagan", "error");
+      return;
+    }
+    const isEdit = currentMessage.id !== null;
+    try {
+      const payload = {
+        user_id: currentMessage.userId || null,
+        subject: currentMessage.subject,
+        body: currentMessage.body,
+      };
+      if (isEdit) {
+        const { error } = await supabase.from("user_messages").update(payload).eq("id", currentMessage.id);
+        if (error) throw error;
+        showNotice("Xabar yangilandi.");
+      } else {
+        const { error } = await supabase.from("user_messages").insert([payload]);
+        if (error) throw error;
+        showNotice(currentMessage.userId ? "Xabar yuborildi." : "Xabar barcha foydalanuvchilarga yuborildi.");
+      }
+      loadAllData();
+      setIsMessageModalOpen(false);
+    } catch (err) {
+      console.error("Xabar saqlashda xato:", err);
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const deleteMessage = async (id) => {
+    if (!confirm("Haqiqatan ham ushbu xabarni o'chirishni xohlaysizmi?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("user_messages").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Xabar o'chirildi.");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  // ============================================
+  // DARS JADVALI AMALLARI (CRUD)
+  // ============================================
+  const saveLesson = async (e) => {
+    e.preventDefault();
+    if (!supabase) {
+      showNotice("Supabase sozlanmagan", "error");
+      return;
+    }
+    const isEdit = currentLesson.id !== null;
+    try {
+      const payload = {
+        title: currentLesson.title,
+        description: currentLesson.description,
+        scheduled_at: currentLesson.scheduledAt,
+        duration_minutes: Number(currentLesson.durationMinutes) || 60,
+        location: currentLesson.location,
+        meeting_link: currentLesson.meetingLink,
+      };
+      if (isEdit) {
+        const { error } = await supabase.from("lessons").update(payload).eq("id", currentLesson.id);
+        if (error) throw error;
+        showNotice("Dars yangilandi.");
+      } else {
+        const { error } = await supabase.from("lessons").insert([payload]);
+        if (error) throw error;
+        showNotice("Dars qo'shildi.");
+      }
+      loadAllData();
+      setIsLessonModalOpen(false);
+    } catch (err) {
+      console.error("Dars saqlashda xato:", err);
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const deleteLesson = async (id) => {
+    if (!confirm("Haqiqatan ham ushbu darsni o'chirishni xohlaysizmi?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("lessons").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Dars o'chirildi.");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  // Foydalanuvchi nomini ID orqali olish (vazifa/xabarlarda ko'rsatish uchun)
+  const getUserName = (userId) => {
+    if (!userId) return "Barcha foydalanuvchilar";
+    const u = users.find(usr => usr.id === userId);
+    return u ? (u.fullName || u.email) : "Noma'lum foydalanuvchi";
+  };
+
+  // datetime-local input uchun formatlash
+  const formatDateTimeLocal = (isoString) => {
+    if (!isoString) return "";
+    const d = new Date(isoString);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
   // ============================================
@@ -553,7 +811,55 @@ export default function AdminPage() {
             }`}
           >
             <Users className="w-4 h-4" />
-            Ro'yxatdan o'tganlar ({registrations.length})
+            Oflayn ariza ({registrations.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "users"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+            }`}
+          >
+            <UserCircle className="w-4 h-4" />
+            Foydalanuvchilar ({users.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("tasks")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "tasks"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            Vazifalar ({userTasks.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("messages")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "messages"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Xabarlar ({userMessages.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("lessons")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "lessons"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+            }`}
+          >
+            <CalendarDays className="w-4 h-4" />
+            Dars jadvali ({lessons.length})
           </button>
         </div>
 
@@ -783,6 +1089,405 @@ export default function AdminPage() {
                       {registrations.length === 0 && (
                         <tr>
                           <td colSpan="4" className="py-8 text-center text-muted">Hozircha hech kim ro'yxatdan o'tmagan.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================
+                TAB 4: GOOGLE ORQALI RO'YXATDAN O'TGAN FOYDALANUVCHILAR
+                ============================================ */}
+            {activeTab === "users" && (
+              <div className="p-6 md:p-8">
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold text-foreground">Google orqali ro'yxatdan o'tganlar</h2>
+                  <p className="text-muted text-xs">
+                    Saytga Google akkaunti orqali kirgan foydalanuvchilar ro'yxati.
+                    Ularga vazifa va xabar yuborishingiz mumkin.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/80 text-muted font-semibold">
+                        <th className="py-4 px-4">Foydalanuvchi</th>
+                        <th className="py-4 px-4">Email</th>
+                        <th className="py-4 px-4">Kirgan sana</th>
+                        <th className="py-4 px-4 text-right">Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {users.map((u) => (
+                        <tr key={u.id} className="hover:bg-cream/20">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              {u.avatarUrl ? (
+                                <img
+                                  src={u.avatarUrl}
+                                  alt={u.fullName}
+                                  className="w-9 h-9 rounded-full object-cover border border-border"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                                  {(u.fullName || u.email || "?").charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="font-semibold text-foreground">{u.fullName || "—"}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-muted text-xs">{u.email}</td>
+                          <td className="py-4 px-4 text-muted text-xs">
+                            {new Date(u.createdAt).toLocaleDateString("uz-UZ")}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentTask({ id: null, userId: u.id, title: "", description: "", dueDate: "" });
+                                  setIsTaskModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 hover:bg-primary hover:text-white text-primary text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                                title="Vazifa yuborish"
+                              >
+                                <ClipboardList className="w-3.5 h-3.5" />
+                                Vazifa
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCurrentMessage({ id: null, userId: u.id, subject: "", body: "" });
+                                  setIsMessageModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 hover:bg-accent hover:text-white text-accent text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                                title="Xabar yuborish"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                Xabar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-muted">
+                            Hozircha hech kim Google orqali ro'yxatdan o'tmagan.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================
+                TAB 5: VAZIFALAR
+                ============================================ */}
+            {activeTab === "tasks" && (
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Foydalanuvchi vazifalari</h2>
+                    <p className="text-muted text-xs">Foydalanuvchilarga yuborilgan vazifalar ro'yxati.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentTask({ id: null, userId: "", title: "", description: "", dueDate: "" });
+                      setIsTaskModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Vazifa yuborish
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/80 text-muted font-semibold">
+                        <th className="py-4 px-4">Sarlavha</th>
+                        <th className="py-4 px-4">Kimga</th>
+                        <th className="py-4 px-4">Muddat</th>
+                        <th className="py-4 px-4">Holati</th>
+                        <th className="py-4 px-4 text-right">Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {userTasks.map((t) => (
+                        <tr key={t.id} className="hover:bg-cream/20">
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-foreground">{t.title}</div>
+                            {t.description && (
+                              <div className="text-xs text-muted mt-1 line-clamp-1">{t.description}</div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-xs">
+                            {t.userId ? (
+                              <span className="text-foreground">{getUserName(t.userId)}</span>
+                            ) : (
+                              <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
+                                Barchaga
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-muted text-xs">
+                            {t.dueDate
+                              ? new Date(t.dueDate).toLocaleDateString("uz-UZ")
+                              : "—"}
+                          </td>
+                          <td className="py-4 px-4">
+                            {t.isCompleted ? (
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <CheckCircle className="w-3 h-3" />
+                                Bajarildi
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <Clock className="w-3 h-3" />
+                                Kutilmoqda
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentTask({
+                                    id: t.id,
+                                    userId: t.userId || "",
+                                    title: t.title,
+                                    description: t.description || "",
+                                    dueDate: t.dueDate || "",
+                                  });
+                                  setIsTaskModalOpen(true);
+                                }}
+                                className="p-2 text-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-colors cursor-pointer"
+                                title="Tahrirlash"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteTask(t.id)}
+                                className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="O'chirish"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {userTasks.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted">Hech qanday vazifa yuborilmagan.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================
+                TAB 6: XABARLAR
+                ============================================ */}
+            {activeTab === "messages" && (
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Foydalanuvchi xabarlari</h2>
+                    <p className="text-muted text-xs">Foydalanuvchilarga yuborilgan xabarlar ro'yxati.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentMessage({ id: null, userId: "", subject: "", body: "" });
+                      setIsMessageModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Xabar yuborish
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/80 text-muted font-semibold">
+                        <th className="py-4 px-4">Mavzu</th>
+                        <th className="py-4 px-4">Kimga</th>
+                        <th className="py-4 px-4">Yuborilgan sana</th>
+                        <th className="py-4 px-4">Holati</th>
+                        <th className="py-4 px-4 text-right">Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {userMessages.map((m) => (
+                        <tr key={m.id} className="hover:bg-cream/20">
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-foreground">{m.subject}</div>
+                            <div className="text-xs text-muted mt-1 line-clamp-1">{m.body}</div>
+                          </td>
+                          <td className="py-4 px-4 text-xs">
+                            {m.userId ? (
+                              <span className="text-foreground">{getUserName(m.userId)}</span>
+                            ) : (
+                              <span className="bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
+                                Barchaga
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-muted text-xs">
+                            {new Date(m.createdAt).toLocaleString("uz-UZ")}
+                          </td>
+                          <td className="py-4 px-4">
+                            {m.isRead ? (
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <CheckCircle className="w-3 h-3" />
+                                O'qildi
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <Mail className="w-3 h-3" />
+                                Yangi
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentMessage({
+                                    id: m.id,
+                                    userId: m.userId || "",
+                                    subject: m.subject,
+                                    body: m.body,
+                                  });
+                                  setIsMessageModalOpen(true);
+                                }}
+                                className="p-2 text-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-colors cursor-pointer"
+                                title="Tahrirlash"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteMessage(m.id)}
+                                className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="O'chirish"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {userMessages.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted">Hech qanday xabar yuborilmagan.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================
+                TAB 7: DARS JADVALI
+                ============================================ */}
+            {activeTab === "lessons" && (
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Dars jadvali</h2>
+                    <p className="text-muted text-xs">
+                      Ro'yxatdan o'tgan foydalanuvchilar profilida ko'rinadigan darslar.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentLesson({ id: null, title: "", description: "", scheduledAt: "", durationMinutes: 60, location: "", meetingLink: "" });
+                      setIsLessonModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Dars qo'shish
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/80 text-muted font-semibold">
+                        <th className="py-4 px-4">Dars nomi</th>
+                        <th className="py-4 px-4">Sana va vaqt</th>
+                        <th className="py-4 px-4">Davomiyligi</th>
+                        <th className="py-4 px-4">Joy / Havola</th>
+                        <th className="py-4 px-4 text-right">Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {lessons.map((l) => (
+                        <tr key={l.id} className="hover:bg-cream/20">
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-foreground">{l.title}</div>
+                            {l.description && (
+                              <div className="text-xs text-muted mt-1 line-clamp-1">{l.description}</div>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-muted text-xs">
+                            {new Date(l.scheduledAt).toLocaleString("uz-UZ")}
+                          </td>
+                          <td className="py-4 px-4 text-muted text-xs">{l.durationMinutes} daq.</td>
+                          <td className="py-4 px-4 text-muted text-xs">
+                            {l.location && <div className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {l.location}</div>}
+                            {l.meetingLink && (
+                              <a href={l.meetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline mt-1">
+                                Havola <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setCurrentLesson({
+                                    id: l.id,
+                                    title: l.title,
+                                    description: l.description || "",
+                                    scheduledAt: formatDateTimeLocal(l.scheduledAt),
+                                    durationMinutes: l.durationMinutes,
+                                    location: l.location || "",
+                                    meetingLink: l.meetingLink || "",
+                                  });
+                                  setIsLessonModalOpen(true);
+                                }}
+                                className="p-2 text-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-colors cursor-pointer"
+                                title="Tahrirlash"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deleteLesson(l.id)}
+                                className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="O'chirish"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {lessons.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-muted">Hech qanday dars qo'shilmagan.</td>
                         </tr>
                       )}
                     </tbody>
@@ -1055,6 +1760,263 @@ export default function AdminPage() {
                   className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
                 >
                   {uploadingFile && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Saqlash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          VAZIFA MODALI (Qo'shish / Tahrirlash)
+          ============================================ */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white border border-border rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              {currentTask.id ? "Vazifani tahrirlash" : "Yangi vazifa yuborish"}
+            </h3>
+
+            <form onSubmit={saveTask} className="space-y-4">
+              {/* Kimga yuborish */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Kimga yuborish *</label>
+                <select
+                  value={currentTask.userId}
+                  onChange={(e) => setCurrentTask({ ...currentTask, userId: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">📢 Barcha foydalanuvchilarga</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.fullName || u.email} ({u.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted/60 mt-1">
+                  "Barcha foydalanuvchilarga" tanlasangiz, vazifa hammaga ko'rinadi.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Vazifa sarlavhasi *</label>
+                <input
+                  type="text"
+                  required
+                  value={currentTask.title}
+                  onChange={(e) => setCurrentTask({ ...currentTask, title: e.target.value })}
+                  placeholder="Masalan: 1-modul testini topshirish"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Tavsif</label>
+                <textarea
+                  rows="4"
+                  value={currentTask.description}
+                  onChange={(e) => setCurrentTask({ ...currentTask, description: e.target.value })}
+                  placeholder="Vazifani batafsil tushuntiring..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Bajarish muddati</label>
+                <input
+                  type="date"
+                  value={currentTask.dueDate}
+                  onChange={(e) => setCurrentTask({ ...currentTask, dueDate: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsTaskModalOpen(false)}
+                  className="px-4 py-2.5 border border-border text-muted hover:bg-cream-dark rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {currentTask.id ? "Saqlash" : "Yuborish"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          XABAR MODALI (Qo'shish / Tahrirlash)
+          ============================================ */}
+      {isMessageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white border border-border rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              {currentMessage.id ? "Xabarni tahrirlash" : "Yangi xabar yuborish"}
+            </h3>
+
+            <form onSubmit={saveMessage} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Kimga yuborish *</label>
+                <select
+                  value={currentMessage.userId}
+                  onChange={(e) => setCurrentMessage({ ...currentMessage, userId: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">📢 Barcha foydalanuvchilarga</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.fullName || u.email} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Mavzu *</label>
+                <input
+                  type="text"
+                  required
+                  value={currentMessage.subject}
+                  onChange={(e) => setCurrentMessage({ ...currentMessage, subject: e.target.value })}
+                  placeholder="Masalan: Ertangi dars haqida"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Xabar matni *</label>
+                <textarea
+                  required
+                  rows="6"
+                  value={currentMessage.body}
+                  onChange={(e) => setCurrentMessage({ ...currentMessage, body: e.target.value })}
+                  placeholder="Xabar matnini kiriting..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsMessageModalOpen(false)}
+                  className="px-4 py-2.5 border border-border text-muted hover:bg-cream-dark rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {currentMessage.id ? "Saqlash" : "Yuborish"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          DARS MODALI (Qo'shish / Tahrirlash)
+          ============================================ */}
+      {isLessonModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white border border-border rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-foreground mb-4">
+              {currentLesson.id ? "Darsni tahrirlash" : "Yangi dars qo'shish"}
+            </h3>
+
+            <form onSubmit={saveLesson} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Dars nomi *</label>
+                <input
+                  type="text"
+                  required
+                  value={currentLesson.title}
+                  onChange={(e) => setCurrentLesson({ ...currentLesson, title: e.target.value })}
+                  placeholder="Masalan: ChatGPT'da prompt yozish"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Tavsif</label>
+                <textarea
+                  rows="3"
+                  value={currentLesson.description}
+                  onChange={(e) => setCurrentLesson({ ...currentLesson, description: e.target.value })}
+                  placeholder="Dars haqida qisqacha ma'lumot..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">Sana va vaqt *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={currentLesson.scheduledAt}
+                    onChange={(e) => setCurrentLesson({ ...currentLesson, scheduledAt: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">Davomiyligi (daqiqa)</label>
+                  <input
+                    type="number"
+                    min="15"
+                    step="15"
+                    value={currentLesson.durationMinutes}
+                    onChange={(e) => setCurrentLesson({ ...currentLesson, durationMinutes: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Manzil (joy)</label>
+                <input
+                  type="text"
+                  value={currentLesson.location}
+                  onChange={(e) => setCurrentLesson({ ...currentLesson, location: e.target.value })}
+                  placeholder="Masalan: 305-xona, Coda Academy"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Onlayn havola (Google Meet, Zoom)</label>
+                <input
+                  type="text"
+                  value={currentLesson.meetingLink}
+                  onChange={(e) => setCurrentLesson({ ...currentLesson, meetingLink: e.target.value })}
+                  placeholder="https://meet.google.com/..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsLessonModalOpen(false)}
+                  className="px-4 py-2.5 border border-border text-muted hover:bg-cream-dark rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                >
                   Saqlash
                 </button>
               </div>

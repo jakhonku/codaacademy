@@ -25,9 +25,16 @@ import { usePathname } from "next/navigation";
 import {
   Menu,       // Hamburger menyu ikonkasi (mobil uchun)
   X,          // Yopish ikonkasi (X belgisi)
+  LogIn,      // Kirish tugmasi ikonkasi
+  User,       // Profil ikonkasi (avatar bo'lmasa)
 } from "lucide-react";
 
+// Auth hook'ini import qilish — foydalanuvchi holatini olish uchun
+import { useAuth } from "@/lib/useAuth";
+
 export default function Navbar() {
+  /* Foydalanuvchi holatini olish — Supabase Auth'dan */
+  const { user, loading } = useAuth();
   /* ============================================
      HOLAT BOSHQARUVI (State Management)
      ============================================
@@ -110,6 +117,56 @@ export default function Navbar() {
                 {item.name}
               </Link>
             ))}
+
+            {/* ============================================
+                FOYDALANUVCHI / KIRISH TUGMASI (DESKTOP)
+                ============================================
+                Agar foydalanuvchi kirgan bo'lsa, avatar va
+                ismni profil havolasi sifatida ko'rsatamiz.
+                Aks holda — "Kirish" tugmasini chiqaramiz.
+                ============================================ */}
+            {!loading && (
+              user ? (
+                <Link
+                  href="/profile"
+                  className={`
+                    ml-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl
+                    text-sm font-medium transition-all duration-300
+                    ${
+                      pathname === "/profile"
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-cream-dark"
+                    }
+                  `}
+                >
+                  {user.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="Profil"
+                      className="w-7 h-7 rounded-full object-cover border border-border"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                      <User className="w-4 h-4" />
+                    </div>
+                  )}
+                  <span className="hidden lg:inline max-w-[120px] truncate">
+                    {user.user_metadata?.full_name ||
+                      user.user_metadata?.name ||
+                      user.email}
+                  </span>
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="ml-2 inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 hover:shadow-md hover:shadow-primary/20"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Kirish
+                </Link>
+              )
+            )}
           </div>
 
           {/* ============================================
@@ -162,6 +219,54 @@ export default function Navbar() {
                 {item.name}
               </Link>
             ))}
+
+            {/* Mobil menyuda kirish / profil tugmasi */}
+            {!loading && (
+              <div className="pt-2 mt-2 border-t border-border/50">
+                {user ? (
+                  <Link
+                    href="/profile"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium
+                      transition-all duration-300
+                      ${
+                        pathname === "/profile"
+                          ? "bg-primary/10 text-primary"
+                          : "text-foreground hover:bg-cream-dark"
+                      }
+                    `}
+                  >
+                    {user.user_metadata?.avatar_url ? (
+                      <img
+                        src={user.user_metadata.avatar_url}
+                        alt="Profil"
+                        className="w-8 h-8 rounded-full object-cover border border-border"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                        <User className="w-4 h-4" />
+                      </div>
+                    )}
+                    <span className="truncate">
+                      {user.user_metadata?.full_name ||
+                        user.user_metadata?.name ||
+                        user.email}
+                    </span>
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    Kirish
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
