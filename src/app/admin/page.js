@@ -44,7 +44,8 @@ import {
   Send,
   Mail,
   Clock,
-  MapPin
+  MapPin,
+  Sparkles
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -336,6 +337,32 @@ export default function AdminPage() {
     } else {
       setPrompts(prev => prev.filter(p => p.id !== id));
       showNotice("Prompt o'chirildi (Lokal)");
+    }
+  };
+
+  const seedPrompts = async () => {
+    if (!supabase) return;
+    if (!confirm("Haqiqatan ham barcha 41 ta namunaviy prompt shablonlarini ma'lumotlar bazasiga yuklamoqchimisiz?")) return;
+    
+    setLoading(true);
+    try {
+      const payloads = staticPrompts.map(p => ({
+        title: p.title,
+        category: p.category,
+        description: p.description,
+        prompt_text: p.promptText
+      }));
+
+      const { error } = await supabase.from("prompts").insert(payloads);
+      if (error) throw error;
+
+      showNotice("Barcha 41 ta namunaviy promptlar muvaffaqiyatli bazaga qo'shildi!");
+      loadAllData();
+    } catch (err) {
+      console.error("Promptlarni seed qilishda xato:", err);
+      showNotice("Xatolik: " + err.message, "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -882,16 +909,27 @@ export default function AdminPage() {
                     <h2 className="text-xl font-bold text-foreground">Promptlar Ro'yxati</h2>
                     <p className="text-muted text-xs">Saytdagi prompt shablonlarini tahrirlang yoki yangi qo'shing.</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setCurrentPrompt({ id: null, title: "", category: "Ta'lim", description: "", promptText: "" });
-                      setIsPromptModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Prompt Qo'shish
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {supabase && prompts.length === 0 && (
+                      <button
+                        onClick={seedPrompts}
+                        className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Namunaviy shablonlarni yuklash (Seed)
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setCurrentPrompt({ id: null, title: "", category: "Ta'lim", description: "", promptText: "" });
+                        setIsPromptModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Prompt Qo'shish
+                    </button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
