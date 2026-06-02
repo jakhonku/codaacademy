@@ -57,7 +57,7 @@ export default function AdminPage() {
   const [currentPrompt, setCurrentPrompt] = useState({ id: null, title: "", category: "Ta'lim", description: "", promptText: "" });
   
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
-  const [currentResource, setCurrentResource] = useState({ id: null, title: "", description: "", type: "pdf", url: "", fileSize: "" });
+  const [currentResource, setCurrentResource] = useState({ id: null, title: "", description: "", type: "pdf", url: "", fileSize: "", parentId: null });
 
   const [notification, setNotification] = useState(null); // { type: 'success'|'error', text: '' }
 
@@ -122,7 +122,8 @@ export default function AdminPage() {
             description: item.description,
             type: item.type,
             url: item.url,
-            fileSize: item.file_size || item.fileSize
+            fileSize: item.file_size || item.fileSize,
+            parentId: item.parent_id || item.parentId || null
           })));
         } else {
           setResources(staticResources);
@@ -323,6 +324,11 @@ export default function AdminPage() {
   const saveResource = async (e) => {
     e.preventDefault();
     const isEdit = currentResource.id !== null;
+    
+    const isGroup = currentResource.type === "group";
+    const finalUrl = isGroup ? "" : (currentResource.url || "");
+    const finalFileSize = isGroup ? null : (currentResource.fileSize || null);
+    const finalParentId = isGroup ? null : (currentResource.parentId || null);
 
     if (supabase) {
       try {
@@ -330,8 +336,9 @@ export default function AdminPage() {
           title: currentResource.title,
           description: currentResource.description,
           type: currentResource.type,
-          url: currentResource.url,
-          file_size: currentResource.fileSize || null,
+          url: finalUrl,
+          file_size: finalFileSize,
+          parent_id: finalParentId,
         };
 
         if (isEdit) {
@@ -352,11 +359,18 @@ export default function AdminPage() {
       }
     } else {
       // Lokal rejimda
+      const updatedResource = {
+        ...currentResource,
+        url: finalUrl,
+        fileSize: finalFileSize,
+        parentId: finalParentId,
+      };
+
       if (isEdit) {
-        setResources(prev => prev.map(r => r.id === currentResource.id ? currentResource : r));
+        setResources(prev => prev.map(r => r.id === currentResource.id ? updatedResource : r));
         showNotice("Resurs yangilandi (Lokal)");
       } else {
-        const newR = { ...currentResource, id: Date.now() };
+        const newR = { ...updatedResource, id: Date.now() };
         setResources(prev => [...prev, newR]);
         showNotice("Resurs qo'shildi (Lokal)");
       }
@@ -383,7 +397,30 @@ export default function AdminPage() {
     }
   };
 
-  // Login Ekran
+  // Resurslarni ierarxik tartiblash (groups, children, orphans)
+  const getStructuredResources = () => {
+    const groups = resources.filter(r => r.type === "group");
+    const orphans = resources.filter(r => r.type !== "group" && !r.parentId);
+    
+    const structured = [];
+    
+    // Har bir guruh va uning bolalarini qo'shamiz
+    groups.forEach(group => {
+      structured.push({ ...group, isGroupParent: true });
+      const children = resources.filter(r => r.parentId === group.id);
+      children.forEach(child => {
+        structured.push({ ...child, isGroupChild: true, parentTitle: group.title });
+      });
+    });
+    
+    // Guruhga kirmaganlarni qo'shamiz
+    orphans.forEach(orphan => {
+      structured.push(orphan);
+    });
+    
+    return structured;
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center bg-cream px-4">
@@ -618,7 +655,7 @@ export default function AdminPage() {
                   </div>
                   <button
                     onClick={() => {
-                      setCurrentResource({ id: null, title: "", description: "", type: "pdf", url: "", fileSize: "" });
+                      setCurrentResource({ id: null, title: "", description: "", type: "pdf", url: "", fileSize: "", parentId: null });
                       setIsResourceModalOpen(true);
                     }}
                     className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
@@ -640,23 +677,42 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
-                      {resources.map((r) => (
-                        <tr key={r.id} className="hover:bg-cream/20">
-                          <td className="py-4 px-4 font-bold text-foreground">{r.title}</td>
+                      {getStructuredResources().map((r) => (
+                        <tr key={r.id} className={`hover:bg-cream/20 ${r.isGroupParent ? 'bg-primary/[0.02] font-semibold' : ''}`}>
+                          <td className="py-4 px-4 text-foreground">
+                            {r.isGroupChild ? (
+                              <div className="flex items-center gap-2 pl-6 font-medium text-muted">
+                                <span className="text-muted/40 font-mono">└─</span>
+                                <span>{r.title}</span>
+                              </div>
+                            ) : r.type === 'group' ? (
+                              <div className="flex items-center gap-2 text-primary font-bold">
+                                <span className="text-lg">📁</span>
+                                <span>{r.title}</span>
+                              </div>
+                            ) : (
+                              <span>{r.title}</span>
+                            )}
+                          </td>
                           <td className="py-4 px-4">
                             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                              r.type === 'group' ? 'bg-indigo-100 text-indigo-800' :
                               r.type === 'pdf' ? 'bg-rose-100 text-rose-800' :
                               r.type === 'video' ? 'bg-blue-100 text-blue-800' :
-                              'bg-amber-100 text-amber-800'
+                              'bg-emerald-100 text-emerald-800'
                             }`}>
-                              {r.type.toUpperCase()}
+                              {r.type === 'group' ? 'MODUL' : r.type.toUpperCase()}
                             </span>
                           </td>
                           <td className="py-4 px-4 text-muted text-xs truncate max-w-xs">
-                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-                              {r.url}
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                            {r.url ? (
+                              <a href={r.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                {r.url}
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="py-4 px-4 text-muted text-xs">{r.fileSize || "-"}</td>
                           <td className="py-4 px-4 text-right">
@@ -857,101 +913,133 @@ export default function AdminPage() {
                   <label className="block text-xs font-semibold text-foreground mb-1">Turi *</label>
                   <select
                     value={currentResource.type}
-                    onChange={(e) => setCurrentResource({ ...currentResource, type: e.target.value })}
+                    onChange={(e) => setCurrentResource({ 
+                      ...currentResource, 
+                      type: e.target.value, 
+                      // Agar guruh bo'lsa parentId ni o'chiramiz
+                      parentId: e.target.value === 'group' ? null : currentResource.parentId 
+                    })}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     <option value="pdf">PDF Fayl</option>
                     <option value="video">Video Havola</option>
                     <option value="link">Veb-sayt Havolasi</option>
+                    <option value="group">📁 Modul / Guruh</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1">Fayl Hajmi</label>
                   <input
                     type="text"
-                    value={currentResource.fileSize}
+                    disabled={currentResource.type === 'group'}
+                    value={currentResource.fileSize || ""}
                     onChange={(e) => setCurrentResource({ ...currentResource, fileSize: e.target.value })}
-                    placeholder="Avto-to'ldiriladi"
-                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder={currentResource.type === 'group' ? "Guruhda havola bo'lmaydi" : "Avto-to'ldiriladi"}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:bg-gray-100"
                   />
                 </div>
               </div>
+
+              {/* Agar fayl bo'lsa, ota guruhni tanlash dropdowni */}
+              {currentResource.type !== 'group' && (
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">Biriktirilgan Modul / Guruh</label>
+                  <select
+                    value={currentResource.parentId || ""}
+                    onChange={(e) => setCurrentResource({ ...currentResource, parentId: e.target.value ? Number(e.target.value) : null })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">-- Modulga biriktirmaslik (Mustaqil resurs) --</option>
+                    {resources
+                      .filter(r => r.type === 'group' && r.id !== currentResource.id)
+                      .map(g => (
+                        <option key={g.id} value={g.id}>{g.title}</option>
+                      ))
+                    }
+                  </select>
+                  <p className="text-xs text-muted/60 mt-1">Ushbu resurs qaysi modul ichiga joylashishini belgilang.</p>
+                </div>
+              )}
 
               {/* ============================================
                   FAYL YUKLASH ZONASI
                   ============================================ */}
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-2">Fayl yuklash (PDF, Word, Rasm)</label>
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 cursor-pointer ${
-                    isDragging
-                      ? "border-primary bg-primary/5 scale-[1.02]"
-                      : "border-border/60 bg-cream/10 hover:border-primary/40 hover:bg-cream/30"
-                  }`}
-                  onClick={() => document.getElementById("file-upload-input").click()}
-                >
-                  <input
-                    type="file"
-                    id="file-upload-input"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) handleFileUpload(file);
-                      e.target.value = "";
-                    }}
-                  />
+              {currentResource.type !== 'group' && (
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-2">Fayl yuklash (PDF, Word, Rasm)</label>
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 cursor-pointer ${
+                      isDragging
+                        ? "border-primary bg-primary/5 scale-[1.02]"
+                        : "border-border/60 bg-cream/10 hover:border-primary/40 hover:bg-cream/30"
+                    }`}
+                    onClick={() => document.getElementById("file-upload-input").click()}
+                  >
+                    <input
+                      type="file"
+                      id="file-upload-input"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) handleFileUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
 
-                  {uploadingFile ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                      <p className="text-sm text-primary font-medium">Yuklanmoqda...</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <UploadCloud className={`w-8 h-8 transition-colors ${isDragging ? "text-primary" : "text-muted/40"}`} />
-                      <p className="text-sm text-muted">
-                        <span className="text-primary font-semibold">Fayl tanlang</span> yoki shu yerga tashlang
-                      </p>
-                      <p className="text-xs text-muted/60">PDF, Word, PNG, JPG (max 10MB)</p>
+                    {uploadingFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                        <p className="text-sm text-primary font-medium">Yuklanmoqda...</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <UploadCloud className={`w-8 h-8 transition-colors ${isDragging ? "text-primary" : "text-muted/40"}`} />
+                        <p className="text-sm text-muted">
+                          <span className="text-primary font-semibold">Fayl tanlang</span> yoki shu yerga tashlang
+                        </p>
+                        <p className="text-xs text-muted/60">PDF, Word, PNG, JPG (max 10MB)</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Yuklangan fayl xabari */}
+                  {uploadProgress && (
+                    <div className="mt-2 flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-xs text-emerald-800 font-medium truncate">{uploadProgress}</span>
+                      <button
+                        type="button"
+                        onClick={() => setUploadProgress("")}
+                        className="ml-auto text-emerald-400 hover:text-emerald-600 flex-shrink-0"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
-
-                {/* Yuklangan fayl xabari */}
-                {uploadProgress && (
-                  <div className="mt-2 flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-xs text-emerald-800 font-medium truncate">{uploadProgress}</span>
-                    <button
-                      type="button"
-                      onClick={() => setUploadProgress("")}
-                      className="ml-auto text-emerald-400 hover:text-emerald-600 flex-shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Yoki qo'lda havola kiritish */}
-              <div>
-                <label className="block text-xs font-semibold text-foreground mb-1">
-                  Havola (URL) {!currentResource.url && "*"}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={currentResource.url}
-                  onChange={(e) => setCurrentResource({ ...currentResource, url: e.target.value })}
-                  placeholder="Fayl yuklasangiz avtomatik to'ldiriladi yoki qo'lda kiriting"
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <p className="text-xs text-muted/60 mt-1">Fayl yuklagan bo'lsangiz, havola avtomatik qo'yiladi</p>
-              </div>
+              {currentResource.type !== 'group' && (
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Havola (URL) {!currentResource.url && "*"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={currentResource.url || ""}
+                    onChange={(e) => setCurrentResource({ ...currentResource, url: e.target.value })}
+                    placeholder="Fayl yuklasangiz avtomatik to'ldiriladi yoki qo'lda kiriting"
+                    className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted/60 mt-1">Fayl yuklagan bo'lsangiz, havola avtomatik qo'yiladi</p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4">
                 <button

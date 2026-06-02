@@ -51,6 +51,7 @@ export default function Navbar() {
     { name: "Promptlar", href: "/prompts" },
     { name: "Resurslar", href: "/resources" },
     { name: "Maqolalar", href: "/prompt-engineering" },
+    { name: "Testlar", href: "/test" },
   ];
 
   return (

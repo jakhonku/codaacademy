@@ -34,9 +34,10 @@ CREATE TABLE IF NOT EXISTS public.resources (
     id BIGSERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT,
-    type TEXT NOT NULL CHECK (type IN ('pdf', 'video', 'link')),
-    url TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('pdf', 'video', 'link', 'group')),
+    url TEXT,
     file_size TEXT,
+    parent_id BIGINT REFERENCES public.resources(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -89,3 +90,72 @@ INSERT INTO public.resources (title, description, type, url, file_size) VALUES
 ('Musiqa va AI — video darslik', 'Musiqada sun''iy intellektdan foydalanish bo''yicha batafsil video qo''llanma.', 'video', 'https://www.youtube.com/watch?v=example', NULL),
 ('OpenAI rasmiy hujjatlari', 'OpenAI''ning rasmiy veb-sayti — eng yangi AI texnologiyalari haqida ma''lumot.', 'link', 'https://openai.com', NULL)
 ON CONFLICT DO NOTHING;
+
+
+-- ====================================================================
+-- 4. TESTLAR TIZIMI
+-- ====================================================================
+
+-- 4.1 TESTLAR JADVALI (quizzes)
+CREATE TABLE IF NOT EXISTS public.quizzes (
+    id BIGSERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    time_limit INTEGER DEFAULT 30,
+    is_active BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Quizzes" ON public.quizzes
+    FOR SELECT USING (true);
+
+CREATE POLICY "All Access for Anon/Admin on Quizzes" ON public.quizzes
+    FOR ALL USING (true) WITH CHECK (true);
+
+
+-- 4.2 TEST SAVOLLARI JADVALI (quiz_questions)
+CREATE TABLE IF NOT EXISTS public.quiz_questions (
+    id BIGSERIAL PRIMARY KEY,
+    quiz_id BIGINT REFERENCES public.quizzes(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    option_a TEXT NOT NULL,
+    option_b TEXT NOT NULL,
+    option_c TEXT NOT NULL,
+    option_d TEXT NOT NULL,
+    correct_answer CHAR(1) NOT NULL CHECK (correct_answer IN ('A', 'B', 'C', 'D')),
+    order_num INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.quiz_questions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Quiz Questions" ON public.quiz_questions
+    FOR SELECT USING (true);
+
+CREATE POLICY "All Access for Anon/Admin on Quiz Questions" ON public.quiz_questions
+    FOR ALL USING (true) WITH CHECK (true);
+
+
+-- 4.3 TEST ISHTIROKCHILARI JADVALI (quiz_participants)
+CREATE TABLE IF NOT EXISTS public.quiz_participants (
+    id BIGSERIAL PRIMARY KEY,
+    quiz_id BIGINT REFERENCES public.quizzes(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    score INTEGER DEFAULT 0,
+    total_questions INTEGER DEFAULT 0,
+    attempt_count INTEGER DEFAULT 0,
+    last_attempt_at TIMESTAMPTZ,
+    completed BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.quiz_participants ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Quiz Participants" ON public.quiz_participants
+    FOR SELECT USING (true);
+
+CREATE POLICY "All Access for Anon/Admin on Quiz Participants" ON public.quiz_participants
+    FOR ALL USING (true) WITH CHECK (true);
+
