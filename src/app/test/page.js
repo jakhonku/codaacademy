@@ -139,14 +139,39 @@ export default function TestPage() {
           .order("created_at", { ascending: false });
 
         if (!err && data) {
-          // Har bir test uchun savollar sonini olish
+          const todayStr = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+          // Har bir test uchun savollar soni va top 3 ishtirokchini olish
           const quizzesWithCount = await Promise.all(
             data.map(async (quiz) => {
               const { count } = await supabase
                 .from("quiz_questions")
                 .select("*", { count: "exact", head: true })
                 .eq("quiz_id", quiz.id);
-              return { ...quiz, questionCount: count || 0 };
+
+              const { data: leadersData } = await supabase
+                .from("quiz_participants")
+                .select("full_name, score, last_attempt_at")
+                .eq("quiz_id", quiz.id)
+                .gte("last_attempt_at", `${todayStr}T00:00:00.000Z`)
+                .order("score", { ascending: false })
+                .limit(10);
+
+              let uniqueLeaders = [];
+              if (leadersData) {
+                const seenNames = new Set();
+                for (const l of leadersData) {
+                  if (!seenNames.has(l.full_name)) {
+                    uniqueLeaders.push(l);
+                    seenNames.add(l.full_name);
+                  }
+                }
+              }
+
+              return { 
+                ...quiz, 
+                questionCount: count || 0,
+                leaders: uniqueLeaders.slice(0, 3)
+              };
             })
           );
           setQuizzes(quizzesWithCount);
@@ -604,6 +629,30 @@ export default function TestPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Bugungi Top-3 Leaderboard */}
+                  {quiz.leaders && quiz.leaders.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-border/40" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
+                        <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                        Bugungi Top-3 Natijalar (Kunlik G'oliblar)
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {quiz.leaders.map((leader, lIdx) => (
+                          <div 
+                            key={lIdx} 
+                            className="flex items-center gap-1.5 bg-cream/80 px-2.5 py-1 rounded-xl text-xs font-medium text-foreground border border-border/40"
+                          >
+                            <span className="text-sm">
+                              {lIdx === 0 ? "🥇" : lIdx === 1 ? "🥈" : "🥉"}
+                            </span>
+                            <span className="font-semibold">{leader.full_name}</span>
+                            <span className="text-primary font-bold">({leader.score} ball)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
