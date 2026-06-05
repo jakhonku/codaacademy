@@ -102,7 +102,7 @@ export default function DashboardPage() {
     if (!authLoading) {
       if (!user) {
         router.replace("/login");
-      } else if (profile && !profile.is_registered) {
+      } else if (profile !== null && !profile.is_registered) {
         router.replace("/login");
       }
     }
@@ -147,8 +147,8 @@ export default function DashboardPage() {
     loadData();
   }, [user]);
 
-  // Sessiya tekshirilayotgan yoki kirmagan foydalanuvchi uchun yuklanish
-  if (authLoading || !user) {
+  // Sessiya tekshirilayotgan, profil yuklanayotgan yoki kirmagan foydalanuvchi uchun yuklanish
+  if (authLoading || !user || profile === null) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />

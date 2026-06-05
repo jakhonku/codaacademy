@@ -39,19 +39,36 @@ export default function AuthCallbackPage() {
         // Sessiya muvaffaqiyatli o'rnatildimi tekshirish
         const { data: { session } } = await supabase.auth.getSession();
 
+        // Yo'naltirishni aniqlash funksiyasi
+        const resolveRedirect = async (currentSession) => {
+          if (!currentSession) {
+            setError("Sessiya yaratilmadi. Iltimos, qayta urinib ko'ring.");
+            return;
+          }
+          // Profilni tekshiramiz — is_registered bo'lmasa login sahifaga qaytaramiz
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("is_registered")
+            .eq("id", currentSession.user.id)
+            .single();
+
+          if (profileData && profileData.is_registered === true) {
+            router.replace("/dashboard");
+          } else {
+            // Ro'yxatdan o'tmagan — kurs kodi kiritish sahifasiga yo'naltirish
+            router.replace("/login");
+          }
+        };
+
         if (session) {
-          router.replace("/dashboard");
+          await resolveRedirect(session);
         } else {
           // Implicit flow uchun (token URL hash'ida) Supabase avtomatik
           // qabul qiladi — biroz kutib, qayta tekshiramiz
           setTimeout(async () => {
             const { data: { session: retrySession } } =
               await supabase.auth.getSession();
-            if (retrySession) {
-              router.replace("/dashboard");
-            } else {
-              setError("Sessiya yaratilmadi. Iltimos, qayta urinib ko'ring.");
-            }
+            await resolveRedirect(retrySession);
           }, 1000);
         }
       } catch (err) {
