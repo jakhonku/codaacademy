@@ -16,7 +16,8 @@
       "Bash(node test-ai.mjs)",
       "Bash(grep -qiE \"Ready|Local:|started server|localhost:3000\" dev-server.log)",
       "Bash(break)",
-      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"id\":\"1\",\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Prompt-engineering nima? Bir jumlada javob ber.\"}]}]}' --max-time 45)"
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"id\":\"1\",\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Prompt-engineering nima? Bir jumlada javob ber.\"}]}]}' --max-time 45)",
+      "Bash(node test-route.mjs)"
     ]
   }
 }

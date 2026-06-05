@@ -52,10 +52,13 @@ export async function POST(req) {
   try {
     const { messages } = await req.json();
 
+    // v6'da convertToModelMessages async — uni kutib (await) olish shart
+    const modelMessages = await convertToModelMessages(messages);
+
     const result = streamText({
       model: google("gemini-2.5-flash"),
       system: SYSTEM_PROMPT,
-      messages: convertToModelMessages(messages),
+      messages: modelMessages,
     });
 
     return result.toUIMessageStreamResponse();
