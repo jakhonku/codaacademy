@@ -100,14 +100,22 @@ export default function LoginPage() {
 
       if (updateCodeErr) throw updateCodeErr;
 
-      // 3. Foydalanuvchi profilini faollashtiramiz (is_registered = true)
+      // 3. Foydalanuvchi profilini faollashtiramiz (is_registered = true).
+      //    upsert ishlatamiz — agar profil qatori hali yaratilmagan bo'lsa ham,
+      //    is_registered = true aniq o'rnatiladi (update 0 qatorga ta'sir qilib qolmaydi).
       const { error: updateProfileErr } = await supabase
         .from("profiles")
-        .update({
-          is_registered: true,
-          invite_code: cleanCode
-        })
-        .eq("id", user.id);
+        .upsert(
+          {
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.user_metadata?.name || "Foydalanuvchi",
+            avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
+            is_registered: true,
+            invite_code: cleanCode,
+          },
+          { onConflict: "id" }
+        );
 
       if (updateProfileErr) throw updateProfileErr;
 
@@ -133,7 +141,10 @@ export default function LoginPage() {
     );
   }
 
-  if (user && profile && !profile.is_registered) {
+  // Foydalanuvchi kirgan, lekin hali kurs kodi bilan tasdiqlanmagan bo'lsa
+  // (profil null bo'lsa ham — tasdiqlanmagan deb hisoblaymiz), kod kiritish
+  // formasini ko'rsatamiz. Aks holda ro'yxatdan o'tish "yo'q bo'lib qoladi".
+  if (user && (!profile || !profile.is_registered)) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-cream-dark/20">
         <div className="w-full max-w-md animate-fade-in-up">
@@ -152,7 +163,7 @@ export default function LoginPage() {
                 Kurs Kodini Kiriting
               </h1>
               <p className="text-muted text-center text-xs mb-6 leading-relaxed">
-                Salom, <span className="font-bold text-foreground">{profile.fullName || user.email}</span>! O'qishni boshlash uchun o'qituvchi tomonidan berilgan maxsus kurs kodini kiriting.
+                Salom, <span className="font-bold text-foreground">{profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email}</span>! O'qishni boshlash uchun o'qituvchi tomonidan berilgan maxsus kurs kodini kiriting.
               </p>
 
               <form onSubmit={handleVerifyCode} className="space-y-4">
