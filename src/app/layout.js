@@ -23,6 +23,9 @@ import "./globals.css";
 // Ilova qobig'i tanlovchisi — sahifaga qarab Navbar yoki Dashboard yon menyusi
 import AppChrome from "@/components/AppChrome";
 
+// AI yordamchi widget — barcha sahifalarda o'ng-pastda ko'rinadi
+import AiAssistant from "@/components/AiAssistant";
+
 /* ============================================
    SHRIFT SOZLAMALARI
    ============================================
@@ -61,6 +64,9 @@ export default function RootLayout({ children }) {
         {/* AppChrome — joriy sahifaga qarab landing (Navbar+Footer) yoki
             dashboard (yon menyu + burger) qobig'ini ko'rsatadi */}
         <AppChrome>{children}</AppChrome>
+
+        {/* AI yordamchi — foydalanuvchilarga yordam beradi */}
+        <AiAssistant />
       </body>
     </html>
   );

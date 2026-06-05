@@ -6,7 +6,17 @@
       "Bash(git commit -m '@ *)",
       "PowerShell(git commit --amend -F \"$env:TEMP\\\\commitmsg.txt\"; if \\($?\\) { Remove-Item \"$env:TEMP\\\\commitmsg.txt\" })",
       "PowerShell(git push *)",
-      "PowerShell(git add *)"
+      "PowerShell(git add *)",
+      "PowerShell(git commit -F \"$env:TEMP\\\\commitmsg.txt\"; if \\($?\\) { Remove-Item \"$env:TEMP\\\\commitmsg.txt\"; git push origin main })",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('ai:',p.dependencies.ai\\); console.log\\('@ai-sdk/google:',p.dependencies['@ai-sdk/google']\\); console.log\\('@ai-sdk/react:',p.dependencies['@ai-sdk/react']\\);\")",
+      "Bash(node -e \"const ai=require\\('ai'\\); console.log\\(Object.keys\\(ai\\).filter\\(k=>/stream|convert|message|tool/i.test\\(k\\)\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const r=require\\('@ai-sdk/react'\\); console.log\\(Object.keys\\(r\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const r=require\\('ai'\\); console.log\\(Object.keys\\(r\\).filter\\(k=>/transport/i.test\\(k\\)\\).join\\(', '\\)\\)\")",
+      "Bash(node test-ai.mjs)",
+      "Bash(grep -qiE \"Ready|Local:|started server|localhost:3000\" dev-server.log)",
+      "Bash(break)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"Content-Type: application/json\" -d '{\"messages\":[{\"id\":\"1\",\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Prompt-engineering nima? Bir jumlada javob ber.\"}]}]}' --max-time 45)"
     ]
   }
 }
