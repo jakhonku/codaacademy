@@ -635,13 +635,15 @@ export default function AdminPage() {
 
   const resetParticipantAttempts = async (participantId) => {
     if (!confirm("Foydalanuvchining urinishlar sonini nolga tushirmoqchimisiz?")) return;
-    if (!supabase) return;
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
-      const { error } = await supabase
-        .from("quiz_participants")
-        .update({ attempt_count: 0 })
-        .eq("id", participantId);
-      if (error) throw error;
+      const res = await fetch("/api/admin/reset-attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": adminPwd },
+        body: JSON.stringify({ participantId }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "Reset qilib bo'lmadi");
       showNotice("Urinishlar qayta tiklandi.");
       if (selectedQuizForResults) {
         await loadQuizParticipants(selectedQuizForResults);
@@ -657,15 +659,17 @@ export default function AdminPage() {
     setIsQuestionsModalOpen(true);
     setLoadingQuestions(true);
     setIsQuestionFormOpen(false);
-    if (!supabase) { setLoadingQuestions(false); return; }
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
-      const { data, error } = await supabase
-        .from("quiz_questions")
-        .select("*")
-        .eq("quiz_id", quiz.id)
-        .order("order_num", { ascending: true });
-      if (!error && data) setQuizQuestions(data);
-      else setQuizQuestions([]);
+      const res = await fetch(`/api/admin/quiz-questions?quizId=${encodeURIComponent(quiz.id)}`, {
+        headers: { "x-admin-password": adminPwd },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setQuizQuestions(json.questions || []);
+      } else {
+        setQuizQuestions([]);
+      }
     } catch (err) {
       setQuizQuestions([]);
     }
@@ -674,8 +678,9 @@ export default function AdminPage() {
 
   const saveQuestion = async (e) => {
     e.preventDefault();
-    if (!supabase || !selectedQuizForQuestions) return;
+    if (!selectedQuizForQuestions) return;
     const isEdit = currentQuestion.id !== null;
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
       const payload = {
         quiz_id: selectedQuizForQuestions.id,
@@ -687,15 +692,14 @@ export default function AdminPage() {
         correct_answer: currentQuestion.correct_answer,
         order_num: currentQuestion.order_num || quizQuestions.length,
       };
-      if (isEdit) {
-        const { error } = await supabase.from("quiz_questions").update(payload).eq("id", currentQuestion.id);
-        if (error) throw error;
-        showNotice("Savol yangilandi.");
-      } else {
-        const { error } = await supabase.from("quiz_questions").insert([payload]);
-        if (error) throw error;
-        showNotice("Yangi savol qo'shildi.");
-      }
+      const res = await fetch("/api/admin/quiz-questions", {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": adminPwd },
+        body: JSON.stringify(isEdit ? { id: currentQuestion.id, ...payload } : payload),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "Saqlab bo'lmadi");
+      showNotice(isEdit ? "Savol yangilandi." : "Yangi savol qo'shildi.");
       setIsQuestionFormOpen(false);
       setCurrentQuestion({ id: null, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "A", order_num: 0 });
       await loadQuizQuestions(selectedQuizForQuestions);
@@ -706,10 +710,14 @@ export default function AdminPage() {
 
   const deleteQuestion = async (id) => {
     if (!confirm("Savolni o'chirmoqchimisiz?")) return;
-    if (!supabase) return;
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
-      const { error } = await supabase.from("quiz_questions").delete().eq("id", id);
-      if (error) throw error;
+      const res = await fetch(`/api/admin/quiz-questions?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": adminPwd },
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "O'chirib bo'lmadi");
       showNotice("Savol o'chirildi.");
       await loadQuizQuestions(selectedQuizForQuestions);
     } catch (err) {

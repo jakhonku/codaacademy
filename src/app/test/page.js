@@ -148,7 +148,7 @@ export default function TestPage() {
           const quizzesWithCount = await Promise.all(
             data.map(async (quiz) => {
               const { count } = await supabase
-                .from("quiz_questions")
+                .from("quiz_questions_public")
                 .select("*", { count: "exact", head: true })
                 .eq("quiz_id", quiz.id);
 
@@ -236,19 +236,16 @@ export default function TestPage() {
               setStep("result");
               return;
             } else {
-              // Boshqa kun — urinishlarni qayta boshlash
-              await supabase
-                .from("quiz_participants")
-                .update({ attempt_count: 0 })
-                .eq("id", existing.id);
+              // Boshqa kun — urinishlar serverda (test topshirilganda) noldan
+              // boshlanadi. Bu yerda faqat UX uchun mahalliy holatni yangilaymiz.
               existing.attempt_count = 0;
             }
           }
         }
 
-        // Savollarni yuklash
+        // Savollarni yuklash — javobsiz view'dan (correct_answer mijozga kelmaydi)
         const { data: qData, error: qErr } = await supabase
-          .from("quiz_questions")
+          .from("quiz_questions_public")
           .select("*")
           .eq("quiz_id", quiz.id)
           .order("order_num", { ascending: true });
@@ -295,84 +292,55 @@ export default function TestPage() {
   const finishQuiz = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
 
-    let correctCount = 0;
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correct_answer) {
-        correctCount++;
-      }
-    });
-
-    setScore(correctCount);
-
+    // Ball SERVERda hisoblanadi (/api/quiz/submit). To'g'ri javoblar mijozga
+    // umuman yuborilmaydi va ballni soxtalashtirib bo'lmaydi.
     if (supabase && selectedQuiz) {
       try {
-        // Ishtirokchini yangilash yoki yaratish
-        const { data: parts } = await supabase
-          .from("quiz_participants")
-          .select("*")
-          .eq("quiz_id", selectedQuiz.id)
-          .eq("full_name", fullName.trim());
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-        const existing = parts && parts.length > 0 ? parts[0] : null;
+        const res = await fetch("/api/quiz/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token || ""}`,
+          },
+          body: JSON.stringify({
+            quizId: selectedQuiz.id,
+            answers,
+            fullName: fullName.trim(),
+          }),
+        });
 
-        if (existing) {
-          const newAttempt = (existing.attempt_count || 0) + 1;
-          const bestScore = Math.max(existing.score || 0, correctCount);
-          await supabase
-            .from("quiz_participants")
-            .update({
-              score: bestScore,
-              total_questions: questions.length,
-              attempt_count: newAttempt,
-              last_attempt_at: new Date().toISOString(),
-              completed: true,
-            })
-            .eq("id", existing.id);
-          setParticipant({ ...existing, attempt_count: newAttempt, score: bestScore });
-        } else {
-          const { data: newPart } = await supabase
-            .from("quiz_participants")
-            .insert([
-              {
-                quiz_id: selectedQuiz.id,
-                full_name: fullName.trim(),
-                score: correctCount,
-                total_questions: questions.length,
-                attempt_count: 1,
-                last_attempt_at: new Date().toISOString(),
-                completed: true,
-              },
-            ])
-            .select()
-            .single();
-          setParticipant(newPart);
+        const result = await res.json().catch(() => ({}));
+
+        // Bugungi urinishlar tugagan
+        if (res.status === 429) {
+          setAttemptBlocked(true);
+          setCooldownTime(result.cooldown || null);
+          setStep("result");
+          return;
         }
 
-        // Leaderboard yuklash
-        const todayStr = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
-        const { data: leadersData } = await supabase
-          .from("quiz_participants")
-          .select("full_name, score, last_attempt_at")
-          .eq("quiz_id", selectedQuiz.id)
-          .gte("last_attempt_at", `${todayStr}T00:00:00.000Z`)
-          .order("score", { ascending: false })
-          .limit(3);
-
-        if (leadersData) {
-          // Bitta ism uchun faqat bitta (eng zo'r) natijani olish
-          const uniqueLeaders = [];
-          const seenNames = new Set();
-          for (const l of leadersData) {
-            if (!seenNames.has(l.full_name)) {
-              uniqueLeaders.push(l);
-              seenNames.add(l.full_name);
-            }
-          }
-          setDailyLeaders(uniqueLeaders.slice(0, 3));
+        if (!res.ok) {
+          setError(result.error || "Natijani saqlashda xatolik.");
+          setScore(0);
+          setStep("result");
+          return;
         }
 
+        setScore(result.score || 0);
+        setParticipant({
+          attempt_count: result.attemptCount,
+          score: result.bestScore,
+        });
+        setDailyLeaders(result.leaders || []);
       } catch (e) {
         console.error("Natijani saqlashda xato:", e);
+        setError("Natijani saqlashda xatolik.");
+        setStep("result");
+        return;
       }
     }
 
