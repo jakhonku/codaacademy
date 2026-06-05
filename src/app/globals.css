@@ -131,6 +131,20 @@ html {
   animation: pulse-slow 3s ease-in-out infinite;
 }
 
+/* Burger menyu (drawer) chapdan ochilishi */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.25s ease-out forwards;
+}
+
 /* Animatsiya kechikishlari — kartochkalar ketma-ket paydo bo'lishi uchun */
 .delay-100 { animation-delay: 0.1s; }
 .delay-200 { animation-delay: 0.2s; }

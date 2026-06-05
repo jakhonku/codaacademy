@@ -20,9 +20,8 @@ import { Inter } from "next/font/google";
 // Global stillar faylini import qilish
 import "./globals.css";
 
-// Navbar va Footer komponentlarini import qilish
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+// Ilova qobig'i tanlovchisi — sahifaga qarab Navbar yoki Dashboard yon menyusi
+import AppChrome from "@/components/AppChrome";
 
 /* ============================================
    SHRIFT SOZLAMALARI
@@ -59,16 +58,9 @@ export default function RootLayout({ children }) {
     <html lang="uz" className={`${inter.variable} h-full antialiased`}>
       {/* Body — sahifaning asosiy qismi */}
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
-        {/* Navbar — barcha sahifalarda yuqorida ko'rinadi */}
-        <Navbar />
-
-        {/* Asosiy kontent — har bir sahifaning o'ziga xos qismi */}
-        <main className="flex-1">
-          {children}
-        </main>
-
-        {/* Footer — barcha sahifalarda pastda ko'rinadi */}
-        <Footer />
+        {/* AppChrome — joriy sahifaga qarab landing (Navbar+Footer) yoki
+            dashboard (yon menyu + burger) qobig'ini ko'rsatadi */}
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );
