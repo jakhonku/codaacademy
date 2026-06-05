@@ -81,6 +81,12 @@ export default function AdminPage() {
     id: null, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "A", order_num: 0
   });
 
+  // Natijalar modali
+  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+  const [selectedQuizForResults, setSelectedQuizForResults] = useState(null);
+  const [quizParticipants, setQuizParticipants] = useState([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+
   // Modal / Tahrirlash holati
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState({ id: null, title: "", category: "Ta'lim", description: "", promptText: "" });
@@ -585,6 +591,44 @@ export default function AdminPage() {
       if (error) throw error;
       showNotice(quiz.is_active ? "Test o'chirildi (nofaol)." : "Test faollashtirildi!");
       loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const loadQuizParticipants = async (quiz) => {
+    setSelectedQuizForResults(quiz);
+    setIsResultsModalOpen(true);
+    setLoadingParticipants(true);
+    if (!supabase) { setLoadingParticipants(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("quiz_participants")
+        .select("*")
+        .eq("quiz_id", quiz.id)
+        .order("score", { ascending: false })
+        .order("last_attempt_at", { ascending: true });
+      if (!error && data) setQuizParticipants(data);
+      else setQuizParticipants([]);
+    } catch (err) {
+      setQuizParticipants([]);
+    }
+    setLoadingParticipants(false);
+  };
+
+  const resetParticipantAttempts = async (participantId) => {
+    if (!confirm("Foydalanuvchining urinishlar sonini nolga tushirmoqchimisiz?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from("quiz_participants")
+        .update({ attempt_count: 0 })
+        .eq("id", participantId);
+      if (error) throw error;
+      showNotice("Urinishlar qayta tiklandi.");
+      if (selectedQuizForResults) {
+        await loadQuizParticipants(selectedQuizForResults);
+      }
     } catch (err) {
       showNotice("Xatolik: " + err.message, "error");
     }
@@ -1760,6 +1804,13 @@ export default function AdminPage() {
                             >
                               Savollar
                             </button>
+                            {/* Natijalar va statistika */}
+                            <button
+                              onClick={() => loadQuizParticipants(quiz)}
+                              className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer"
+                            >
+                              Natijalar
+                            </button>
                             {/* Tahrirlash */}
                             <button
                               onClick={() => {
@@ -2520,6 +2571,114 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          NATIJALAR MODALI (Test natijalarini ko'rish)
+          ============================================ */}
+      {isResultsModalOpen && selectedQuizForResults && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-6">
+            <div className="flex items-center justify-between p-6 border-b border-border/40">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">{selectedQuizForResults.title} Natijalari</h3>
+                <p className="text-xs text-muted mt-0.5">Ishtirokchilar reytingi va ballari</p>
+              </div>
+              <button onClick={() => setIsResultsModalOpen(false)}
+                className="p-2 hover:bg-cream-dark rounded-xl transition-colors cursor-pointer">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingParticipants ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                </div>
+              ) : quizParticipants.length === 0 ? (
+                <div className="text-center py-12 text-muted">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p className="font-semibold text-foreground">Hali hech kim test topshirmagan</p>
+                  <p className="text-sm">Tinglovchilar testni yakunlagach, ularning natijalari bu yerda ko'rinadi.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border/80 text-muted font-semibold text-xs uppercase tracking-wider">
+                        <th className="py-4 px-4 text-center">O'rin</th>
+                        <th className="py-4 px-4">Tinglovchi (Ism-Familiya)</th>
+                        <th className="py-4 px-4 text-center">To'g'ri javoblar</th>
+                        <th className="py-4 px-4 text-center">Foiz (Ball)</th>
+                        <th className="py-4 px-4 text-center">Urinishlar</th>
+                        <th className="py-4 px-4 text-right">Oxirgi urinish</th>
+                        <th className="py-4 px-4 text-right">Amallar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {quizParticipants.map((p, idx) => {
+                        const pct = p.total_questions > 0 ? Math.round((p.score / p.total_questions) * 100) : 0;
+                        return (
+                          <tr key={p.id} className="hover:bg-cream/20">
+                            <td className="py-4 px-4 text-center">
+                              <div className="flex items-center justify-center">
+                                {idx === 0 ? (
+                                  <span className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold shadow-sm" title="1-o'rin">🥇</span>
+                                ) : idx === 1 ? (
+                                  <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-sm font-bold shadow-sm" title="2-o'rin">🥈</span>
+                                ) : idx === 2 ? (
+                                  <span className="w-8 h-8 rounded-full bg-orange-50 text-orange-700 flex items-center justify-center text-sm font-bold shadow-sm" title="3-o'rin">🥉</span>
+                                ) : (
+                                  <span className="text-muted font-semibold">{idx + 1}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 font-bold text-foreground">{p.full_name}</td>
+                            <td className="py-4 px-4 text-center font-semibold text-muted">
+                              {p.score} / {p.total_questions}
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                pct >= 80 ? "bg-emerald-100 text-emerald-700" :
+                                pct >= 60 ? "bg-amber-100 text-amber-700" :
+                                "bg-rose-100 text-rose-700"
+                              }`}>
+                                {pct}%
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="text-muted font-medium bg-cream-dark px-2 py-0.5 rounded-md text-xs">
+                                {p.attempt_count} / 3
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-right text-xs text-muted">
+                              {p.last_attempt_at ? new Date(p.last_attempt_at).toLocaleString("uz-UZ", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              }) : "-"}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <button
+                                onClick={() => resetParticipantAttempts(p.id)}
+                                className="px-2.5 py-1.5 text-xs font-semibold border border-primary/25 text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
+                                title="Urinishlar sonini qayta tiklash (nolga tushirish)"
+                              >
+                                Tiklash
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
