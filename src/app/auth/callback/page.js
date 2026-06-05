@@ -40,7 +40,7 @@ export default function AuthCallbackPage() {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session) {
-          router.replace("/profile");
+          router.replace("/dashboard");
         } else {
           // Implicit flow uchun (token URL hash'ida) Supabase avtomatik
           // qabul qiladi — biroz kutib, qayta tekshiramiz
@@ -48,7 +48,7 @@ export default function AuthCallbackPage() {
             const { data: { session: retrySession } } =
               await supabase.auth.getSession();
             if (retrySession) {
-              router.replace("/profile");
+              router.replace("/dashboard");
             } else {
               setError("Sessiya yaratilmadi. Iltimos, qayta urinib ko'ring.");
             }
@@ -89,7 +89,7 @@ export default function AuthCallbackPage() {
               Kirish yakunlanmoqda...
             </h2>
             <p className="text-sm text-muted">
-              Iltimos, biroz kuting. Sizni profil sahifasiga yo'naltiramiz.
+              Iltimos, biroz kuting. Sizni boshqaruv paneliga yo'naltiramiz.
             </p>
           </>
         )}

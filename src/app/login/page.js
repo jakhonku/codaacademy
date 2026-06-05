@@ -20,10 +20,10 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [signingIn, setSigningIn] = useState(false);
 
-  // Agar foydalanuvchi allaqachon kirgan bo'lsa, profilga yo'naltirish
+  // Agar foydalanuvchi allaqachon kirgan bo'lsa, boshqaruv paneliga yo'naltirish
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/profile");
+      router.replace("/dashboard");
     }
   }, [user, loading, router]);
 

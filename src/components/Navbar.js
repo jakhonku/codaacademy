@@ -55,10 +55,13 @@ export default function Navbar() {
      ============================================ */
   const menuItems = [
     { name: "Bosh sahifa", href: "/" },
+    // Boshqaruv paneli — faqat Google orqali kirgan foydalanuvchilarga ko'rinadi
+    ...(user ? [{ name: "Boshqaruv paneli", href: "/dashboard" }] : []),
     { name: "Promptlar", href: "/prompts" },
-    { name: "Resurslar", href: "/resources" },
+    // Resurslar va Testlar — faqat Google orqali kirgan foydalanuvchilarga ko'rinadi
+    ...(user ? [{ name: "Resurslar", href: "/resources" }] : []),
     { name: "Maqolalar", href: "/prompt-engineering" },
-    { name: "Testlar", href: "/test" },
+    ...(user ? [{ name: "Testlar", href: "/test" }] : []),
   ];
 
   return (

@@ -9,11 +9,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import SectionTitle from "@/components/SectionTitle";
 import ResourceCard from "@/components/ResourceCard";
 import staticResources from "@/data/resources";
 import { supabase } from "@/lib/supabase";
-import { 
+import { useAuth } from "@/lib/useAuth";
+import {
   Loader2, 
   Folder, 
   FileText, 
@@ -27,12 +29,24 @@ import {
 } from "lucide-react";
 
 export default function ResourcesPage() {
+  const router = useRouter();
+  // Foydalanuvchi holati — faqat Google orqali kirganlar resurslarni ko'radi
+  const { user, loading: authLoading } = useAuth();
+
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedModules, setExpandedModules] = useState({});
 
-  // Resurslarni yuklash
+  // Kirmagan foydalanuvchini login sahifasiga yo'naltirish
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [user, authLoading, router]);
+
+  // Resurslarni yuklash (faqat foydalanuvchi kirgan bo'lsa)
+  useEffect(() => {
+    if (!user) return;
     async function fetchResources() {
       setLoading(true);
       if (supabase) {
@@ -64,7 +78,7 @@ export default function ResourcesPage() {
       setLoading(false);
     }
     fetchResources();
-  }, []);
+  }, [user]);
 
   const toggleModule = (id) => {
     setExpandedModules(prev => ({
@@ -109,6 +123,16 @@ export default function ResourcesPage() {
     };
     return configs[type] || configs.link;
   };
+
+  // Sessiyani tekshirayotgan yoki kirmagan foydalanuvchi uchun yuklanish ko'rsatiladi
+  // (kirmaganlar yuqoridagi effekt orqali /login sahifasiga yo'naltiriladi)
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <section className="py-16 md:py-20 bg-cream min-h-screen">

@@ -45,7 +45,7 @@ export default function HomePage() {
             .select("*")
             .order("created_at", { ascending: true })
             .limit(3);
-          
+
           if (!error && data && data.length > 0) {
             // Supabase'dan kelgan kalit nomlarini front-endga moslash (prompt_text -> promptText)
             const formattedData = data.map(item => ({
@@ -111,7 +111,7 @@ export default function HomePage() {
           created_at: new Date().toISOString()
         });
         localStorage.setItem("offline_registrations", JSON.stringify(localRegs));
-        
+
         setSubmitStatus("success");
         setFormData({ fullName: "", phone: "", department: "" });
       } catch (err) {

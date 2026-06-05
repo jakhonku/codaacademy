@@ -17,7 +17,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/useAuth";
 import {
   User,
   ClipboardCheck,
@@ -40,6 +42,17 @@ import {
 } from "lucide-react";
 
 export default function TestPage() {
+  const router = useRouter();
+  // Foydalanuvchi holati — faqat Google orqali kirganlar testlarni ko'radi
+  const { user, loading: authLoading } = useAuth();
+
+  // Kirmagan foydalanuvchini login sahifasiga yo'naltirish
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [user, authLoading, router]);
+
   // ============================================
   // HOLATLAR
   // ============================================
@@ -366,6 +379,19 @@ export default function TestPage() {
     if (pct >= 40) return "Yetarli emas";
     return "Qayta tayyorlaning";
   };
+
+  // ============================================
+  // 0. AUTENTIFIKATSIYA TEKSHIRUVI
+  // ============================================
+  // Sessiyani tekshirayotgan yoki kirmagan foydalanuvchi uchun yuklanish ko'rsatiladi
+  // (kirmaganlar yuqoridagi effekt orqali /login sahifasiga yo'naltiriladi)
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   // ============================================
   // 1. RO'YXATDAN O'TISH
