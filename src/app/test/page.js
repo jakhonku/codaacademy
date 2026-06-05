@@ -78,6 +78,7 @@ export default function TestPage() {
   // Natija
   const [score, setScore] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [dailyLeaders, setDailyLeaders] = useState([]);
 
   // Urinish cheklovi
   const [participant, setParticipant] = useState(null);
@@ -96,8 +97,10 @@ export default function TestPage() {
       setFullName(savedName);
       setStep("quizList");
       loadQuizzes();
+    } else if (user?.user_metadata?.full_name) {
+      setFullName(user.user_metadata.full_name);
     }
-  }, []);
+  }, [user]);
 
   // ============================================
   // TAYMER
@@ -187,21 +190,24 @@ export default function TestPage() {
         if (existing) {
           setParticipant(existing);
 
-          // 3 urinishdan keyin 1 soat tekshirish
+          // 3 urinishdan keyin kunlik tekshirish
           if (existing.attempt_count >= 3) {
             const lastAttempt = new Date(existing.last_attempt_at);
             const now = new Date();
-            const diffMs = now - lastAttempt;
-            const oneHour = 60 * 60 * 1000;
+            
+            const isToday = lastAttempt.getFullYear() === now.getFullYear() &&
+                            lastAttempt.getMonth() === now.getMonth() &&
+                            lastAttempt.getDate() === now.getDate();
 
-            if (diffMs < oneHour) {
-              const remainingMs = oneHour - diffMs;
+            if (isToday) {
+              const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+              const remainingMs = tomorrow - now;
               setCooldownTime(Math.ceil(remainingMs / 1000));
               setAttemptBlocked(true);
               setStep("result");
               return;
             } else {
-              // 1 soat o'tgan — urinishlarni qayta boshlash
+              // Boshqa kun — urinishlarni qayta boshlash
               await supabase
                 .from("quiz_participants")
                 .update({ attempt_count: 0 })
@@ -312,6 +318,30 @@ export default function TestPage() {
             .single();
           setParticipant(newPart);
         }
+
+        // Leaderboard yuklash
+        const todayStr = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+        const { data: leadersData } = await supabase
+          .from("quiz_participants")
+          .select("full_name, score, last_attempt_at")
+          .eq("quiz_id", selectedQuiz.id)
+          .gte("last_attempt_at", `${todayStr}T00:00:00.000Z`)
+          .order("score", { ascending: false })
+          .limit(3);
+
+        if (leadersData) {
+          // Bitta ism uchun faqat bitta (eng zo'r) natijani olish
+          const uniqueLeaders = [];
+          const seenNames = new Set();
+          for (const l of leadersData) {
+             if (!seenNames.has(l.full_name)) {
+                uniqueLeaders.push(l);
+                seenNames.add(l.full_name);
+             }
+          }
+          setDailyLeaders(uniqueLeaders.slice(0, 3));
+        }
+
       } catch (e) {
         console.error("Natijani saqlashda xato:", e);
       }
@@ -792,8 +822,11 @@ export default function TestPage() {
                 kutishingiz kerak.
               </p>
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
-                <p className="text-amber-800 text-sm font-semibold">
-                  Qolgan vaqt: ~{cooldownMin} daqiqa {cooldownSec} soniya
+                <p className="text-amber-800 text-sm font-semibold mb-2">
+                  Keyingi urinish yarim tundan so'ng yangilanadi.
+                </p>
+                <p className="text-amber-800 text-xs">
+                  Yangi kun boshlanishiga qolgan vaqt: ~{Math.floor(cooldownMin / 60)} soat {cooldownMin % 60} daqiqa
                 </p>
               </div>
               <button
@@ -905,11 +938,37 @@ export default function TestPage() {
                 )}
                 {attemptsLeft === 0 && (
                   <p className="text-xs text-amber-600 mt-2 font-medium">
-                    Barcha urinishlar tugadi. 1 soat kutgach qayta urinish
-                    mumkin.
+                    Barcha urinishlar tugadi. Keyingi kun qayta urinish mumkin.
                   </p>
                 )}
               </div>
+
+              {/* Reyting (Leaderboard) */}
+              {dailyLeaders.length > 0 && (
+                <div className="bg-white border border-border/60 rounded-2xl p-4 mb-6 text-left shadow-sm">
+                  <h3 className="text-sm font-bold flex items-center gap-2 mb-3">
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    Bugungi Top Ishtirokchilar
+                  </h3>
+                  <div className="space-y-2">
+                    {dailyLeaders.map((leader, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-cream/30 p-2.5 rounded-xl border border-border/30">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            idx === 0 ? "bg-amber-100 text-amber-700" :
+                            idx === 1 ? "bg-slate-100 text-slate-700" :
+                            "bg-orange-50 text-orange-700"
+                          }`}>
+                            {idx + 1}
+                          </div>
+                          <span className="text-sm font-medium text-foreground line-clamp-1">{leader.full_name}</span>
+                        </div>
+                        <span className="text-xs font-bold text-primary">{leader.score} ball</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tugmalar */}
               <div className="flex flex-col gap-3">

@@ -17,6 +17,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import staticPrompts from "@/data/prompts";
 import staticResources from "@/data/resources";
+import { ClipboardCheck } from "lucide-react";
 
 // Ikonkalar
 import {
@@ -63,7 +64,22 @@ export default function AdminPage() {
   const [userTasks, setUserTasks] = useState([]);  // Foydalanuvchi vazifalari
   const [userMessages, setUserMessages] = useState([]); // Foydalanuvchi xabarlari
   const [lessons, setLessons] = useState([]);      // Dars jadvali
+  const [quizzes, setQuizzes] = useState([]);       // Testlar
   const [loading, setLoading] = useState(true);
+
+  // Quiz (Test) modal holati
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [currentQuiz, setCurrentQuiz] = useState({ id: null, title: "", description: "", time_limit: 30, is_active: false });
+
+  // Savollar modali
+  const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
+  const [selectedQuizForQuestions, setSelectedQuizForQuestions] = useState(null);
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [isQuestionFormOpen, setIsQuestionFormOpen] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    id: null, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "A", order_num: 0
+  });
 
   // Modal / Tahrirlash holati
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
@@ -243,6 +259,17 @@ export default function AdminPage() {
           })));
         } else {
           setLessons([]);
+        }
+
+        // 8. Testlar (quizzes)
+        const { data: qzData, error: qzErr } = await supabase
+          .from("quizzes")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!qzErr && qzData) {
+          setQuizzes(qzData);
+        } else {
+          setQuizzes([]);
         }
       } catch (err) {
         console.error("Supabase ma'lumotlarni yuklashda xatolik:", err);
@@ -503,6 +530,127 @@ export default function AdminPage() {
       if (error) throw error;
       showNotice("Dars o'chirildi.");
       loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  // ============================================
+  // TESTLAR AMALLARI (CRUD)
+  // ============================================
+  const saveQuiz = async (e) => {
+    e.preventDefault();
+    if (!supabase) { showNotice("Supabase sozlanmagan", "error"); return; }
+    const isEdit = currentQuiz.id !== null;
+    try {
+      const payload = {
+        title: currentQuiz.title,
+        description: currentQuiz.description,
+        time_limit: Number(currentQuiz.time_limit) || 30,
+        is_active: currentQuiz.is_active,
+      };
+      if (isEdit) {
+        const { error } = await supabase.from("quizzes").update(payload).eq("id", currentQuiz.id);
+        if (error) throw error;
+        showNotice("Test yangilandi.");
+      } else {
+        const { error } = await supabase.from("quizzes").insert([payload]);
+        if (error) throw error;
+        showNotice("Yangi test qo'shildi.");
+      }
+      loadAllData();
+      setIsQuizModalOpen(false);
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const deleteQuiz = async (id) => {
+    if (!confirm("Haqiqatan ham ushbu testni O'CHIRMOQCHIMISIZ? Barcha savollar ham o'chib ketadi!")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("quizzes").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Test o'chirildi.");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const toggleQuizActive = async (quiz) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("quizzes").update({ is_active: !quiz.is_active }).eq("id", quiz.id);
+      if (error) throw error;
+      showNotice(quiz.is_active ? "Test o'chirildi (nofaol)." : "Test faollashtirildi!");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  // Savollar boshqaruvi
+  const loadQuizQuestions = async (quiz) => {
+    setSelectedQuizForQuestions(quiz);
+    setIsQuestionsModalOpen(true);
+    setLoadingQuestions(true);
+    setIsQuestionFormOpen(false);
+    if (!supabase) { setLoadingQuestions(false); return; }
+    try {
+      const { data, error } = await supabase
+        .from("quiz_questions")
+        .select("*")
+        .eq("quiz_id", quiz.id)
+        .order("order_num", { ascending: true });
+      if (!error && data) setQuizQuestions(data);
+      else setQuizQuestions([]);
+    } catch (err) {
+      setQuizQuestions([]);
+    }
+    setLoadingQuestions(false);
+  };
+
+  const saveQuestion = async (e) => {
+    e.preventDefault();
+    if (!supabase || !selectedQuizForQuestions) return;
+    const isEdit = currentQuestion.id !== null;
+    try {
+      const payload = {
+        quiz_id: selectedQuizForQuestions.id,
+        question_text: currentQuestion.question_text,
+        option_a: currentQuestion.option_a,
+        option_b: currentQuestion.option_b,
+        option_c: currentQuestion.option_c,
+        option_d: currentQuestion.option_d,
+        correct_answer: currentQuestion.correct_answer,
+        order_num: currentQuestion.order_num || quizQuestions.length,
+      };
+      if (isEdit) {
+        const { error } = await supabase.from("quiz_questions").update(payload).eq("id", currentQuestion.id);
+        if (error) throw error;
+        showNotice("Savol yangilandi.");
+      } else {
+        const { error } = await supabase.from("quiz_questions").insert([payload]);
+        if (error) throw error;
+        showNotice("Yangi savol qo'shildi.");
+      }
+      setIsQuestionFormOpen(false);
+      setCurrentQuestion({ id: null, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "A", order_num: 0 });
+      await loadQuizQuestions(selectedQuizForQuestions);
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
+  const deleteQuestion = async (id) => {
+    if (!confirm("Savolni o'chirmoqchimisiz?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("quiz_questions").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Savol o'chirildi.");
+      await loadQuizQuestions(selectedQuizForQuestions);
     } catch (err) {
       showNotice("Xatolik: " + err.message, "error");
     }
@@ -887,6 +1035,18 @@ export default function AdminPage() {
           >
             <CalendarDays className="w-4 h-4" />
             Dars jadvali ({lessons.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("quizzes")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "quizzes"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+            }`}
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            Testlar ({quizzes.length})
           </button>
         </div>
 
@@ -1534,6 +1694,100 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* ============================================
+                TAB 7: TESTLAR boshqaruvi
+                ============================================ */}
+            {activeTab === "quizzes" && (
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Testlar Boshqaruvi</h2>
+                    <p className="text-muted text-xs">Faol testlarni yarating, savollarni kiriting va boshqaring.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setCurrentQuiz({ id: null, title: "", description: "", time_limit: 30, is_active: false });
+                      setIsQuizModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yangi Test Qo'shish
+                  </button>
+                </div>
+
+                {quizzes.length === 0 ? (
+                  <div className="text-center py-16 text-muted">
+                    <ClipboardCheck className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="font-semibold text-foreground mb-1">Hali testlar qo'shilmagan</p>
+                    <p className="text-sm">Yuqoridagi tugma orqali birinchi testni yarating.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {quizzes.map((quiz) => (
+                      <div key={quiz.id} className="border border-border/50 rounded-2xl p-5 hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-start gap-4 flex-1 min-w-0">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${quiz.is_active ? "bg-emerald-50 border border-emerald-200" : "bg-cream border border-border/40"}`}>
+                              <ClipboardCheck className={`w-6 h-6 ${quiz.is_active ? "text-emerald-600" : "text-muted"}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-bold text-foreground">{quiz.title}</h3>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${quiz.is_active ? "bg-emerald-100 text-emerald-700" : "bg-amber-50 text-amber-600"}`}>
+                                  {quiz.is_active ? "● Faol" : "○ Nofaol"}
+                                </span>
+                              </div>
+                              {quiz.description && <p className="text-sm text-muted mt-0.5 line-clamp-1">{quiz.description}</p>}
+                              <p className="text-xs text-muted/70 mt-1">
+                                <span className="font-medium">Vaqt:</span> {quiz.time_limit} daqiqa
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Faollashtirish / o'chirish toggle */}
+                            <button
+                              onClick={() => toggleQuizActive(quiz)}
+                              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${quiz.is_active ? "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"}`}
+                              title={quiz.is_active ? "Nofaol qilish" : "Faollashtirish"}
+                            >
+                              {quiz.is_active ? "O'chirish" : "Faollashtirish"}
+                            </button>
+                            {/* Savollarni boshqarish */}
+                            <button
+                              onClick={() => loadQuizQuestions(quiz)}
+                              className="px-3 py-2 rounded-xl text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 transition-all cursor-pointer"
+                            >
+                              Savollar
+                            </button>
+                            {/* Tahrirlash */}
+                            <button
+                              onClick={() => {
+                                setCurrentQuiz({ id: quiz.id, title: quiz.title, description: quiz.description || "", time_limit: quiz.time_limit, is_active: quiz.is_active });
+                                setIsQuizModalOpen(true);
+                              }}
+                              className="p-2 text-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-colors cursor-pointer"
+                              title="Tahrirlash"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            {/* O'chirish */}
+                            <button
+                              onClick={() => deleteQuiz(quiz.id)}
+                              className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                              title="O'chirish"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </div>
@@ -2059,6 +2313,216 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          TESTLAR MODALI (Quiz yaratish/tahrirlash)
+          ============================================ */}
+      {isQuizModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-border/40">
+              <h3 className="text-lg font-bold text-foreground">
+                {currentQuiz.id ? "Testni Tahrirlash" : "Yangi Test Qo'shish"}
+              </h3>
+              <button onClick={() => setIsQuizModalOpen(false)} className="p-2 hover:bg-cream-dark rounded-xl transition-colors cursor-pointer">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+            <form onSubmit={saveQuiz} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Test nomi *</label>
+                <input
+                  type="text" required
+                  value={currentQuiz.title}
+                  onChange={(e) => setCurrentQuiz({ ...currentQuiz, title: e.target.value })}
+                  placeholder="Masalan: AI Asoslari bo'yicha test"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Tavsif</label>
+                <textarea
+                  rows={2}
+                  value={currentQuiz.description}
+                  onChange={(e) => setCurrentQuiz({ ...currentQuiz, description: e.target.value })}
+                  placeholder="Test haqida qisqacha ma'lumot"
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">Vaqt chegarasi (daqiqa) *</label>
+                <input
+                  type="number" required min="5" max="180"
+                  value={currentQuiz.time_limit}
+                  onChange={(e) => setCurrentQuiz({ ...currentQuiz, time_limit: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox" id="quiz-active"
+                  checked={currentQuiz.is_active}
+                  onChange={(e) => setCurrentQuiz({ ...currentQuiz, is_active: e.target.checked })}
+                  className="w-4 h-4 accent-primary cursor-pointer"
+                />
+                <label htmlFor="quiz-active" className="text-sm font-medium text-foreground cursor-pointer">
+                  Testni hoziroq faollashtirish (Tinglovchilar ko'ra oladi)
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <button type="button" onClick={() => setIsQuizModalOpen(false)}
+                  className="px-4 py-2.5 border border-border text-muted hover:bg-cream-dark rounded-xl text-sm font-semibold transition-colors cursor-pointer">
+                  Bekor qilish
+                </button>
+                <button type="submit"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer">
+                  Saqlash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          SAVOLLAR MODALI (Quiz ichidagi savollarni boshqarish)
+          ============================================ */}
+      {isQuestionsModalOpen && selectedQuizForQuestions && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl my-6">
+            <div className="flex items-center justify-between p-6 border-b border-border/40">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">{selectedQuizForQuestions.title}</h3>
+                <p className="text-xs text-muted mt-0.5">Savollar boshqaruvi</p>
+              </div>
+              <button onClick={() => { setIsQuestionsModalOpen(false); setIsQuestionFormOpen(false); }}
+                className="p-2 hover:bg-cream-dark rounded-xl transition-colors cursor-pointer">
+                <X className="w-5 h-5 text-muted" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Savol qo'shish / tahrirlash formasi */}
+              {isQuestionFormOpen && (
+                <form onSubmit={saveQuestion} className="bg-cream/40 border border-border/60 rounded-2xl p-5 mb-6 space-y-3">
+                  <h4 className="text-sm font-bold text-foreground mb-2">
+                    {currentQuestion.id ? "Savolni Tahrirlash" : "Yangi Savol Qo'shish"}
+                  </h4>
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1">Savol matni *</label>
+                    <textarea rows={2} required
+                      value={currentQuestion.question_text}
+                      onChange={(e) => setCurrentQuestion({ ...currentQuestion, question_text: e.target.value })}
+                      placeholder="Savol matnini kiriting..."
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-white text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {["A", "B", "C", "D"].map((opt) => (
+                      <div key={opt}>
+                        <label className="block text-xs font-semibold text-foreground mb-1">{opt} varianti *</label>
+                        <input type="text" required
+                          value={currentQuestion[`option_${opt.toLowerCase()}`]}
+                          onChange={(e) => setCurrentQuestion({ ...currentQuestion, [`option_${opt.toLowerCase()}`]: e.target.value })}
+                          placeholder={`${opt} varianti`}
+                          className="w-full px-3 py-2.5 rounded-xl border border-border bg-white text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1">To'g'ri javob *</label>
+                    <select required
+                      value={currentQuestion.correct_answer}
+                      onChange={(e) => setCurrentQuestion({ ...currentQuestion, correct_answer: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-white text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setIsQuestionFormOpen(false)}
+                      className="px-4 py-2.5 border border-border text-muted hover:bg-white rounded-xl text-sm font-semibold transition-colors cursor-pointer">
+                      Bekor
+                    </button>
+                    <button type="submit"
+                      className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer">
+                      Saqlash
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Savol qo'shish tugmasi */}
+              {!isQuestionFormOpen && (
+                <button
+                  onClick={() => {
+                    setCurrentQuestion({ id: null, question_text: "", option_a: "", option_b: "", option_c: "", option_d: "", correct_answer: "A", order_num: quizQuestions.length });
+                    setIsQuestionFormOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-primary/30 text-primary hover:border-primary hover:bg-primary/5 rounded-2xl py-3 text-sm font-semibold transition-all cursor-pointer mb-4"
+                >
+                  <Plus className="w-4 h-4" />
+                  Yangi Savol Qo'shish
+                </button>
+              )}
+
+              {/* Savollar ro'yxati */}
+              {loadingQuestions ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                </div>
+              ) : quizQuestions.length === 0 ? (
+                <p className="text-center text-muted text-sm py-6">Hali savollar kiritilmagan.</p>
+              ) : (
+                <div className="space-y-3">
+                  {quizQuestions.map((q, idx) => (
+                    <div key={q.id} className="bg-cream/30 border border-border/40 rounded-2xl p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="w-6 h-6 bg-primary/10 text-primary text-xs font-bold rounded-full flex items-center justify-center">{idx + 1}</span>
+                            <p className="text-sm font-semibold text-foreground">{q.question_text}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {["A", "B", "C", "D"].map((opt) => (
+                              <span key={opt} className={`text-xs px-2.5 py-1.5 rounded-lg ${
+                                q.correct_answer === opt
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
+                                  : "bg-white text-muted border border-border/40"
+                              }`}>
+                                {opt}: {q[`option_${opt.toLowerCase()}`]}
+                                {q.correct_answer === opt && " ✓"}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => { setCurrentQuestion(q); setIsQuestionFormOpen(true); }}
+                            className="p-2 text-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteQuestion(q.id)}
+                            className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
