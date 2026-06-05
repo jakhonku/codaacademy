@@ -16,7 +16,10 @@ import { createClient } from "@supabase/supabase-js";
 export async function GET(request) {
   // 1. Admin parolini tekshirish
   const adminPassword = request.headers.get("x-admin-password");
-  const expectedPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+  const expectedPassword =
+    process.env.ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
+    "admin123";
 
   if (adminPassword !== expectedPassword) {
     return new Response(

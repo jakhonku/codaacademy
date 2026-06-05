@@ -114,30 +114,46 @@ export default function AdminPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
-  // Parolni tekshirish (Local storage yoki state orqali sessiyani saqlash)
+  // Sessiyani tekshirish — parol endi sessionStorage'da (bundle'da EMAS)
   useEffect(() => {
-    const isAuth = sessionStorage.getItem("admin_auth") === "true";
+    const isAuth =
+      sessionStorage.getItem("admin_auth") === "true" &&
+      !!sessionStorage.getItem("admin_pwd");
     if (isAuth) {
       setIsAuthenticated(true);
       loadAllData();
     }
   }, []);
 
-  const handleLogin = (e) => {
+  // Parol SERVERda tekshiriladi (/api/admin/login). To'g'ri bo'lsa, parol
+  // shu sessiya uchun sessionStorage'da saqlanadi va admin route'lariga
+  // x-admin-password header sifatida yuboriladi.
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const envPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
-    if (passwordInput === envPassword) {
-      sessionStorage.setItem("admin_auth", "true");
-      setIsAuthenticated(true);
-      setLoginError("");
-      loadAllData();
-    } else {
-      setLoginError("Noto'g'ri parol! Iltimos, qayta urinib ko'ring.");
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: passwordInput }),
+      });
+      if (res.ok) {
+        sessionStorage.setItem("admin_auth", "true");
+        sessionStorage.setItem("admin_pwd", passwordInput);
+        setIsAuthenticated(true);
+        setPasswordInput("");
+        loadAllData();
+      } else {
+        setLoginError("Noto'g'ri parol! Iltimos, qayta urinib ko'ring.");
+      }
+    } catch {
+      setLoginError("Server bilan bog'lanib bo'lmadi. Qayta urining.");
     }
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem("admin_auth");
+    sessionStorage.removeItem("admin_pwd");
     setIsAuthenticated(false);
     setPasswordInput("");
   };
@@ -195,7 +211,7 @@ export default function AdminPage() {
         //    auth.users dan to'g'ridan-to'g'ri o'qish uchun server API
         //    ishlatamiz (service_role kalit talab qilinadi).
         try {
-          const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+          const adminPwd = sessionStorage.getItem("admin_pwd") || "";
           const res = await fetch("/api/admin/users", {
             headers: { "x-admin-password": adminPwd },
           });
@@ -281,7 +297,7 @@ export default function AdminPage() {
 
         // 9. Kurs kodlari (invite_codes) — server route orqali (RLS yopiq)
         try {
-          const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+          const adminPwd = sessionStorage.getItem("admin_pwd") || "";
           const icRes = await fetch("/api/admin/invite-codes", {
             headers: { "x-admin-password": adminPwd },
           });
@@ -635,7 +651,7 @@ export default function AdminPage() {
 
   const resetParticipantAttempts = async (participantId) => {
     if (!confirm("Foydalanuvchining urinishlar sonini nolga tushirmoqchimisiz?")) return;
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const res = await fetch("/api/admin/reset-attempts", {
         method: "POST",
@@ -659,7 +675,7 @@ export default function AdminPage() {
     setIsQuestionsModalOpen(true);
     setLoadingQuestions(true);
     setIsQuestionFormOpen(false);
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const res = await fetch(`/api/admin/quiz-questions?quizId=${encodeURIComponent(quiz.id)}`, {
         headers: { "x-admin-password": adminPwd },
@@ -680,7 +696,7 @@ export default function AdminPage() {
     e.preventDefault();
     if (!selectedQuizForQuestions) return;
     const isEdit = currentQuestion.id !== null;
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const payload = {
         quiz_id: selectedQuizForQuestions.id,
@@ -710,7 +726,7 @@ export default function AdminPage() {
 
   const deleteQuestion = async (id) => {
     if (!confirm("Savolni o'chirmoqchimisiz?")) return;
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const res = await fetch(`/api/admin/quiz-questions?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -729,7 +745,7 @@ export default function AdminPage() {
   // KURS KODLARI AMALLARI (Invite Codes)
   // ============================================
   const generateInviteCode = async () => {
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const res = await fetch("/api/admin/invite-codes", {
         method: "POST",
@@ -746,7 +762,7 @@ export default function AdminPage() {
 
   const deleteInviteCode = async (id) => {
     if (!confirm("Haqiqatan ham ushbu kurs kodini o'chirmoqchimisiz?")) return;
-    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+    const adminPwd = sessionStorage.getItem("admin_pwd") || "";
     try {
       const res = await fetch(`/api/admin/invite-codes?id=${encodeURIComponent(id)}`, {
         method: "DELETE",

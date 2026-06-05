@@ -16,7 +16,10 @@ import { createClient } from "@supabase/supabase-js";
 
 function checkAuth(request) {
   const adminPassword = request.headers.get("x-admin-password");
-  const expected = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+  const expected =
+    process.env.ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
+    "admin123";
   return adminPassword === expected;
 }
 

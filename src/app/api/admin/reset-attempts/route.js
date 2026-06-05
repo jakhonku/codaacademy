@@ -17,7 +17,11 @@ function json(obj, status) {
 
 export async function POST(request) {
   const pwd = request.headers.get("x-admin-password");
-  if (pwd !== (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123")) {
+  const expected =
+    process.env.ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_ADMIN_PASSWORD ||
+    "admin123";
+  if (pwd !== expected) {
     return json({ error: "Ruxsat berilmagan" }, 401);
   }
 
