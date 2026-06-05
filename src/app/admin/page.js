@@ -158,29 +158,45 @@ export default function AdminPage() {
     setPasswordInput("");
   };
 
+  // Admin DB yordamchisi — kontent va shaxsiy jadvallar RLS bilan yopiq,
+  // shuning uchun o'qish/yozish service_role server route orqali bo'ladi.
+  const adminDb = async (action, table, opts = {}) => {
+    const res = await fetch("/api/admin/db", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": sessionStorage.getItem("admin_pwd") || "",
+      },
+      body: JSON.stringify({ action, table, ...opts }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.error || "Amal bajarilmadi");
+    return out;
+  };
+
   // Ma'lumotlarni yuklash (Supabase yoki Fallback)
   const loadAllData = async () => {
     setLoading(true);
     if (supabase) {
       try {
-        // 1. Promptlarni yuklash
-        const { data: pData, error: pErr } = await supabase.from("prompts").select("*").order("created_at", { ascending: true });
-        if (!pErr && pData) {
-          setPrompts(pData.map(item => ({
+        // 1. Promptlarni yuklash (admin route — service_role)
+        try {
+          const { data: pData } = await adminDb("list", "prompts", { order: "created_at", ascending: true });
+          setPrompts((pData || []).map(item => ({
             id: item.id,
             title: item.title,
             category: item.category,
             description: item.description,
             promptText: item.prompt_text || item.promptText
           })));
-        } else {
+        } catch (e) {
           setPrompts(staticPrompts);
         }
 
         // 2. Resurslarni yuklash
-        const { data: rData, error: rErr } = await supabase.from("resources").select("*").order("created_at", { ascending: true });
-        if (!rErr && rData) {
-          setResources(rData.map(item => ({
+        try {
+          const { data: rData } = await adminDb("list", "resources", { order: "created_at", ascending: true });
+          setResources((rData || []).map(item => ({
             id: item.id,
             title: item.title,
             description: item.description,
@@ -189,21 +205,21 @@ export default function AdminPage() {
             fileSize: item.file_size || item.fileSize,
             parentId: item.parent_id || item.parentId || null
           })));
-        } else {
+        } catch (e) {
           setResources(staticResources);
         }
 
         // 3. Ro'yxatdan o'tganlarni yuklash
-        const { data: regData, error: regErr } = await supabase.from("registrations").select("*").order("created_at", { ascending: false });
-        if (!regErr && regData) {
-          setRegistrations(regData.map(item => ({
+        try {
+          const { data: regData } = await adminDb("list", "registrations", { order: "created_at", ascending: false });
+          setRegistrations((regData || []).map(item => ({
             id: item.id,
             fullName: item.full_name,
             phone: item.phone,
             department: item.department,
             createdAt: item.created_at
           })));
-        } else {
+        } catch (e) {
           setRegistrations([]);
         }
 
@@ -228,12 +244,9 @@ export default function AdminPage() {
         }
 
         // 5. Foydalanuvchi vazifalari
-        const { data: tData, error: tErr } = await supabase
-          .from("user_tasks")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!tErr && tData) {
-          setUserTasks(tData.map(t => ({
+        try {
+          const { data: tData } = await adminDb("list", "user_tasks", { order: "created_at", ascending: false });
+          setUserTasks((tData || []).map(t => ({
             id: t.id,
             userId: t.user_id,
             title: t.title,
@@ -242,17 +255,14 @@ export default function AdminPage() {
             isCompleted: t.is_completed,
             createdAt: t.created_at,
           })));
-        } else {
+        } catch (e) {
           setUserTasks([]);
         }
 
         // 6. Foydalanuvchi xabarlari
-        const { data: mData, error: mErr } = await supabase
-          .from("user_messages")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!mErr && mData) {
-          setUserMessages(mData.map(m => ({
+        try {
+          const { data: mData } = await adminDb("list", "user_messages", { order: "created_at", ascending: false });
+          setUserMessages((mData || []).map(m => ({
             id: m.id,
             userId: m.user_id,
             subject: m.subject,
@@ -260,17 +270,14 @@ export default function AdminPage() {
             isRead: m.is_read,
             createdAt: m.created_at,
           })));
-        } else {
+        } catch (e) {
           setUserMessages([]);
         }
 
         // 7. Dars jadvali
-        const { data: lData, error: lErr } = await supabase
-          .from("lessons")
-          .select("*")
-          .order("scheduled_at", { ascending: true });
-        if (!lErr && lData) {
-          setLessons(lData.map(l => ({
+        try {
+          const { data: lData } = await adminDb("list", "lessons", { order: "scheduled_at", ascending: true });
+          setLessons((lData || []).map(l => ({
             id: l.id,
             title: l.title,
             description: l.description,
@@ -280,18 +287,15 @@ export default function AdminPage() {
             meetingLink: l.meeting_link,
             createdAt: l.created_at,
           })));
-        } else {
+        } catch (e) {
           setLessons([]);
         }
 
         // 8. Testlar (quizzes)
-        const { data: qzData, error: qzErr } = await supabase
-          .from("quizzes")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!qzErr && qzData) {
-          setQuizzes(qzData);
-        } else {
+        try {
+          const { data: qzData } = await adminDb("list", "quizzes", { order: "created_at", ascending: false });
+          setQuizzes(qzData || []);
+        } catch (e) {
           setQuizzes([]);
         }
 
@@ -360,12 +364,10 @@ export default function AdminPage() {
         };
 
         if (isEdit) {
-          const { error } = await supabase.from("prompts").update(payload).eq("id", currentPrompt.id);
-          if (error) throw error;
+          await adminDb("update", "prompts", { id: currentPrompt.id, values: payload });
           showNotice("Prompt muvaffaqiyatli yangilandi.");
         } else {
-          const { error } = await supabase.from("prompts").insert([payload]);
-          if (error) throw error;
+          await adminDb("insert", "prompts", { values: payload });
           showNotice("Yangi prompt qo'shildi.");
         }
         loadAllData();
@@ -393,8 +395,7 @@ export default function AdminPage() {
 
     if (supabase) {
       try {
-        const { error } = await supabase.from("prompts").delete().eq("id", id);
-        if (error) throw error;
+        await adminDb("delete", "prompts", { id });
         showNotice("Prompt o'chirildi.");
         loadAllData();
       } catch (err) {
@@ -419,8 +420,7 @@ export default function AdminPage() {
         prompt_text: p.promptText
       }));
 
-      const { error } = await supabase.from("prompts").insert(payloads);
-      if (error) throw error;
+      await adminDb("insert", "prompts", { values: payloads });
 
       showNotice("Barcha 41 ta namunaviy promptlar muvaffaqiyatli bazaga qo'shildi!");
       loadAllData();
@@ -450,12 +450,10 @@ export default function AdminPage() {
         due_date: currentTask.dueDate || null,
       };
       if (isEdit) {
-        const { error } = await supabase.from("user_tasks").update(payload).eq("id", currentTask.id);
-        if (error) throw error;
+        await adminDb("update", "user_tasks", { id: currentTask.id, values: payload });
         showNotice("Vazifa yangilandi.");
       } else {
-        const { error } = await supabase.from("user_tasks").insert([payload]);
-        if (error) throw error;
+        await adminDb("insert", "user_tasks", { values: payload });
         showNotice(currentTask.userId ? "Vazifa yuborildi." : "Vazifa barcha foydalanuvchilarga yuborildi.");
       }
       loadAllData();
@@ -470,8 +468,7 @@ export default function AdminPage() {
     if (!confirm("Haqiqatan ham ushbu vazifani o'chirishni xohlaysizmi?")) return;
     if (!supabase) return;
     try {
-      const { error } = await supabase.from("user_tasks").delete().eq("id", id);
-      if (error) throw error;
+      await adminDb("delete", "user_tasks", { id });
       showNotice("Vazifa o'chirildi.");
       loadAllData();
     } catch (err) {
@@ -496,12 +493,10 @@ export default function AdminPage() {
         body: currentMessage.body,
       };
       if (isEdit) {
-        const { error } = await supabase.from("user_messages").update(payload).eq("id", currentMessage.id);
-        if (error) throw error;
+        await adminDb("update", "user_messages", { id: currentMessage.id, values: payload });
         showNotice("Xabar yangilandi.");
       } else {
-        const { error } = await supabase.from("user_messages").insert([payload]);
-        if (error) throw error;
+        await adminDb("insert", "user_messages", { values: payload });
         showNotice(currentMessage.userId ? "Xabar yuborildi." : "Xabar barcha foydalanuvchilarga yuborildi.");
       }
       loadAllData();
@@ -516,8 +511,7 @@ export default function AdminPage() {
     if (!confirm("Haqiqatan ham ushbu xabarni o'chirishni xohlaysizmi?")) return;
     if (!supabase) return;
     try {
-      const { error } = await supabase.from("user_messages").delete().eq("id", id);
-      if (error) throw error;
+      await adminDb("delete", "user_messages", { id });
       showNotice("Xabar o'chirildi.");
       loadAllData();
     } catch (err) {
@@ -545,12 +539,10 @@ export default function AdminPage() {
         meeting_link: currentLesson.meetingLink,
       };
       if (isEdit) {
-        const { error } = await supabase.from("lessons").update(payload).eq("id", currentLesson.id);
-        if (error) throw error;
+        await adminDb("update", "lessons", { id: currentLesson.id, values: payload });
         showNotice("Dars yangilandi.");
       } else {
-        const { error } = await supabase.from("lessons").insert([payload]);
-        if (error) throw error;
+        await adminDb("insert", "lessons", { values: payload });
         showNotice("Dars qo'shildi.");
       }
       loadAllData();
@@ -565,8 +557,7 @@ export default function AdminPage() {
     if (!confirm("Haqiqatan ham ushbu darsni o'chirishni xohlaysizmi?")) return;
     if (!supabase) return;
     try {
-      const { error } = await supabase.from("lessons").delete().eq("id", id);
-      if (error) throw error;
+      await adminDb("delete", "lessons", { id });
       showNotice("Dars o'chirildi.");
       loadAllData();
     } catch (err) {
@@ -589,12 +580,10 @@ export default function AdminPage() {
         is_active: currentQuiz.is_active,
       };
       if (isEdit) {
-        const { error } = await supabase.from("quizzes").update(payload).eq("id", currentQuiz.id);
-        if (error) throw error;
+        await adminDb("update", "quizzes", { id: currentQuiz.id, values: payload });
         showNotice("Test yangilandi.");
       } else {
-        const { error } = await supabase.from("quizzes").insert([payload]);
-        if (error) throw error;
+        await adminDb("insert", "quizzes", { values: payload });
         showNotice("Yangi test qo'shildi.");
       }
       loadAllData();
@@ -608,8 +597,7 @@ export default function AdminPage() {
     if (!confirm("Haqiqatan ham ushbu testni O'CHIRMOQCHIMISIZ? Barcha savollar ham o'chib ketadi!")) return;
     if (!supabase) return;
     try {
-      const { error } = await supabase.from("quizzes").delete().eq("id", id);
-      if (error) throw error;
+      await adminDb("delete", "quizzes", { id });
       showNotice("Test o'chirildi.");
       loadAllData();
     } catch (err) {
@@ -620,8 +608,7 @@ export default function AdminPage() {
   const toggleQuizActive = async (quiz) => {
     if (!supabase) return;
     try {
-      const { error } = await supabase.from("quizzes").update({ is_active: !quiz.is_active }).eq("id", quiz.id);
-      if (error) throw error;
+      await adminDb("update", "quizzes", { id: quiz.id, values: { is_active: !quiz.is_active } });
       showNotice(quiz.is_active ? "Test o'chirildi (nofaol)." : "Test faollashtirildi!");
       loadAllData();
     } catch (err) {
@@ -896,12 +883,10 @@ export default function AdminPage() {
         };
 
         if (isEdit) {
-          const { error } = await supabase.from("resources").update(payload).eq("id", currentResource.id);
-          if (error) throw error;
+          await adminDb("update", "resources", { id: currentResource.id, values: payload });
           showNotice("Resurs muvaffaqiyatli yangilandi.");
         } else {
-          const { error } = await supabase.from("resources").insert([payload]);
-          if (error) throw error;
+          await adminDb("insert", "resources", { values: payload });
           showNotice("Yangi resurs qo'shildi.");
         }
         loadAllData();
@@ -938,8 +923,7 @@ export default function AdminPage() {
 
     if (supabase) {
       try {
-        const { error } = await supabase.from("resources").delete().eq("id", id);
-        if (error) throw error;
+        await adminDb("delete", "resources", { id });
         showNotice("Resurs o'chirildi.");
         loadAllData();
       } catch (err) {
