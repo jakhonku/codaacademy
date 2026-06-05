@@ -40,31 +40,44 @@ export async function GET(request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // 3. Barcha foydalanuvchilarni listAll bilan olish
+  // 3. Faqat kurs kodi bilan tasdiqlangan (is_registered = true) foydalanuvchilarni olish
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+    // profiles jadvalidan faqat tasdiqlangan foydalanuvchilarni olamiz
+    const { data: profilesData, error: profilesErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, full_name, avatar_url, is_registered, invite_code, created_at")
+      .eq("is_registered", true)
+      .order("created_at", { ascending: false });
+
+    if (profilesErr) throw profilesErr;
+
+    // auth.users dan qo'shimcha ma'lumotlarni olamiz
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
       perPage: 1000,
     });
 
-    if (error) throw error;
+    if (authErr) throw authErr;
 
-    // Faqat kerakli maydonlarni qaytaramiz
-    const users = (data.users || []).map((u) => ({
-      id: u.id,
-      email: u.email,
-      fullName:
-        u.user_metadata?.full_name ||
-        u.user_metadata?.name ||
-        null,
-      avatarUrl:
-        u.user_metadata?.avatar_url ||
-        u.user_metadata?.picture ||
-        null,
-      createdAt: u.created_at,
-      lastSignInAt: u.last_sign_in_at,
-      provider: u.app_metadata?.provider || "—",
-    }));
+    // auth.users bilan birlashtirish
+    const authUsersMap = {};
+    (authData.users || []).forEach((u) => {
+      authUsersMap[u.id] = u;
+    });
+
+    const users = (profilesData || []).map((p) => {
+      const authUser = authUsersMap[p.id];
+      return {
+        id: p.id,
+        email: p.email,
+        fullName: p.full_name || authUser?.user_metadata?.full_name || authUser?.user_metadata?.name || null,
+        avatarUrl: p.avatar_url || authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
+        createdAt: p.created_at,
+        lastSignInAt: authUser?.last_sign_in_at || null,
+        provider: authUser?.app_metadata?.provider || "—",
+        inviteCode: p.invite_code || null,
+      };
+    });
 
     return new Response(JSON.stringify({ users }), {
       status: 200,
