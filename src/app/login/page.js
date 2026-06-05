@@ -68,56 +68,36 @@ export default function LoginPage() {
 
     try {
       const cleanCode = inviteCode.trim().toUpperCase();
-      // 1. Kodni bazadan qidiramiz
-      const { data: codeData, error: fetchErr } = await supabase
-        .from("invite_codes")
-        .select("*")
-        .eq("code", cleanCode)
-        .single();
 
-      if (fetchErr || !codeData) {
-        setCodeError("Kurs kodi topilmadi. Iltimos, kodni to'g'ri kiritganingizni tekshiring.");
+      // Kod tekshiruvi SERVERda bajariladi (/api/redeem-code).
+      // is_registered ni faqat server (service_role) yoqadi — mijoz emas.
+      // Joriy sessiyaning access_token'ini yuboramiz, server foydalanuvchini aniqlaydi.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setCodeError("Sessiya topilmadi. Iltimos, qayta kiring.");
         setVerifyingCode(false);
         return;
       }
 
-      if (codeData.is_used) {
-        setCodeError("Ushbu kurs kodi allaqachon ishlatilgan! Kurs kodi faqat bir marta ishlatilishi mumkin.");
+      const res = await fetch("/api/redeem-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ code: cleanCode }),
+      });
+
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setCodeError(result.error || "Kurs kodini tasdiqlab bo'lmadi.");
         setVerifyingCode(false);
         return;
       }
-
-      // 2. Kodni ishlatilgan deb belgilaymiz
-      const { error: updateCodeErr } = await supabase
-        .from("invite_codes")
-        .update({
-          is_used: true,
-          used_by: user.id,
-          used_by_email: user.email,
-          used_at: new Date().toISOString()
-        })
-        .eq("id", codeData.id);
-
-      if (updateCodeErr) throw updateCodeErr;
-
-      // 3. Foydalanuvchi profilini faollashtiramiz (is_registered = true).
-      //    upsert ishlatamiz — agar profil qatori hali yaratilmagan bo'lsa ham,
-      //    is_registered = true aniq o'rnatiladi (update 0 qatorga ta'sir qilib qolmaydi).
-      const { error: updateProfileErr } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || user.user_metadata?.name || "Foydalanuvchi",
-            avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture,
-            is_registered: true,
-            invite_code: cleanCode,
-          },
-          { onConflict: "id" }
-        );
-
-      if (updateProfileErr) throw updateProfileErr;
 
       setCodeSuccess("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
       await refreshProfile();
@@ -127,7 +107,7 @@ export default function LoginPage() {
 
     } catch (err) {
       console.error("Kod tasdiqlashda xato:", err);
-      setCodeError("Xatolik yuz berdi: " + err.message);
+      setCodeError("Xatolik yuz berdi. Birozdan so'ng qayta urining.");
     } finally {
       setVerifyingCode(false);
     }

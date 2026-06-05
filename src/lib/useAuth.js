@@ -27,37 +27,15 @@ export function useAuth() {
       return;
     }
     try {
-      // maybeSingle() — profil bo'lmasa xato bermaydi (yangi foydalanuvchi uchun normal holat)
-      let { data } = await supabase
+      // Faqat o'qiymiz. Profil qatorini auth trigger (signup) yoki
+      // /api/redeem-code (kod tasdiqlanganda) yaratadi/yangilaydi —
+      // mijoz tomonidan is_registered yozilmaydi (RLS xavfsizligi).
+      // maybeSingle() — profil hali bo'lmasa xato bermaydi.
+      const { data } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", u.id)
         .maybeSingle();
-
-      // Agar profil trigger orqali hali yaratilmagan bo'lsa, uni qo'lda yaratib olamiz.
-      // upsert + ignoreDuplicates — ikki marta yuklanish (getSession va onAuthStateChange)
-      // bir vaqtda ishlaganda duplicate-key xatosi bo'lmasligi uchun. Mavjud qatorni
-      // ustidan yozmaydi (is_registered = true holati saqlanadi).
-      if (!data) {
-        await supabase
-          .from("profiles")
-          .upsert(
-            {
-              id: u.id,
-              email: u.email,
-              full_name: u.user_metadata?.full_name || u.user_metadata?.name || "Foydalanuvchi",
-              avatar_url: u.user_metadata?.avatar_url || u.user_metadata?.picture,
-            },
-            { onConflict: "id", ignoreDuplicates: true }
-          );
-
-        const reread = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", u.id)
-          .maybeSingle();
-        data = reread.data;
-      }
 
       setProfile(data ?? null);
     } catch (e) {

@@ -279,14 +279,19 @@ export default function AdminPage() {
           setQuizzes([]);
         }
 
-        // 9. Kurs kodlari (invite_codes)
-        const { data: icData, error: icErr } = await supabase
-          .from("invite_codes")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (!icErr && icData) {
-          setInviteCodes(icData);
-        } else {
+        // 9. Kurs kodlari (invite_codes) — server route orqali (RLS yopiq)
+        try {
+          const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
+          const icRes = await fetch("/api/admin/invite-codes", {
+            headers: { "x-admin-password": adminPwd },
+          });
+          if (icRes.ok) {
+            const icJson = await icRes.json();
+            setInviteCodes(icJson.codes || []);
+          } else {
+            setInviteCodes([]);
+          }
+        } catch (e) {
           setInviteCodes([]);
         }
       } catch (err) {
@@ -716,20 +721,15 @@ export default function AdminPage() {
   // KURS KODLARI AMALLARI (Invite Codes)
   // ============================================
   const generateInviteCode = async () => {
-    if (!supabase) {
-      showNotice("Supabase sozlanmagan", "error");
-      return;
-    }
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let randomPart = "";
-    for (let i = 0; i < 5; i++) {
-      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const newCode = `CODA-${randomPart}`;
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
-      const { error } = await supabase.from("invite_codes").insert([{ code: newCode }]);
-      if (error) throw error;
-      showNotice(`Yangi kurs kodi yaratildi: ${newCode}`);
+      const res = await fetch("/api/admin/invite-codes", {
+        method: "POST",
+        headers: { "x-admin-password": adminPwd },
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "Kod yaratib bo'lmadi");
+      showNotice(`Yangi kurs kodi yaratildi: ${result.code?.code || ""}`);
       loadAllData();
     } catch (err) {
       showNotice("Kurs kodi yaratishda xato: " + err.message, "error");
@@ -738,10 +738,14 @@ export default function AdminPage() {
 
   const deleteInviteCode = async (id) => {
     if (!confirm("Haqiqatan ham ushbu kurs kodini o'chirmoqchimisiz?")) return;
-    if (!supabase) return;
+    const adminPwd = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
     try {
-      const { error } = await supabase.from("invite_codes").delete().eq("id", id);
-      if (error) throw error;
+      const res = await fetch(`/api/admin/invite-codes?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": adminPwd },
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || "O'chirib bo'lmadi");
       showNotice("Kurs kodi o'chirildi.");
       loadAllData();
     } catch (err) {
