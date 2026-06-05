@@ -14,18 +14,26 @@ import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { LogIn, ShieldCheck, Sparkles, AlertCircle, Loader2 } from "lucide-react";
 
+import { supabase } from "@/lib/supabase";
+
 export default function LoginPage() {
   const router = useRouter();
-  const { user, loading, signInWithGoogle } = useAuth();
+  const { user, profile, loading, signInWithGoogle, signOut, refreshProfile } = useAuth();
   const [error, setError] = useState("");
   const [signingIn, setSigningIn] = useState(false);
 
-  // Agar foydalanuvchi allaqachon kirgan bo'lsa, boshqaruv paneliga yo'naltirish
+  // Kod tekshirish holatlari
+  const [inviteCode, setInviteCode] = useState("");
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [codeSuccess, setCodeSuccess] = useState("");
+
+  // Agar foydalanuvchi allaqachon kirgan bo'lsa va ro'yxatdan o'tgan bo'lsa, boshqaruv paneliga yo'naltirish
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && profile && profile.is_registered) {
       router.replace("/dashboard");
     }
-  }, [user, loading, router]);
+  }, [user, profile, loading, router]);
 
   const handleGoogleSignIn = async () => {
     setError("");
@@ -42,10 +50,167 @@ export default function LoginPage() {
     }
   };
 
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    if (!inviteCode.trim() || !user) return;
+    setVerifyingCode(true);
+    setCodeError("");
+    setCodeSuccess("");
+
+    if (!supabase) {
+      setCodeSuccess("Muvaffaqiyatli ro'yxatdan o'tdingiz (Lokal)!");
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 1000);
+      setVerifyingCode(false);
+      return;
+    }
+
+    try {
+      const cleanCode = inviteCode.trim().toUpperCase();
+      // 1. Kodni bazadan qidiramiz
+      const { data: codeData, error: fetchErr } = await supabase
+        .from("invite_codes")
+        .select("*")
+        .eq("code", cleanCode)
+        .single();
+
+      if (fetchErr || !codeData) {
+        setCodeError("Kurs kodi topilmadi. Iltimos, kodni to'g'ri kiritganingizni tekshiring.");
+        setVerifyingCode(false);
+        return;
+      }
+
+      if (codeData.is_used) {
+        setCodeError("Ushbu kurs kodi allaqachon ishlatilgan! Kurs kodi faqat bir marta ishlatilishi mumkin.");
+        setVerifyingCode(false);
+        return;
+      }
+
+      // 2. Kodni ishlatilgan deb belgilaymiz
+      const { error: updateCodeErr } = await supabase
+        .from("invite_codes")
+        .update({
+          is_used: true,
+          used_by: user.id,
+          used_by_email: user.email,
+          used_at: new Date().toISOString()
+        })
+        .eq("id", codeData.id);
+
+      if (updateCodeErr) throw updateCodeErr;
+
+      // 3. Foydalanuvchi profilini faollashtiramiz (is_registered = true)
+      const { error: updateProfileErr } = await supabase
+        .from("profiles")
+        .update({
+          is_registered: true,
+          invite_code: cleanCode
+        })
+        .eq("id", user.id);
+
+      if (updateProfileErr) throw updateProfileErr;
+
+      setCodeSuccess("Muvaffaqiyatli ro'yxatdan o'tdingiz!");
+      await refreshProfile();
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 1000);
+
+    } catch (err) {
+      console.error("Kod tasdiqlashda xato:", err);
+      setCodeError("Xatolik yuz berdi: " + err.message);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (user && profile && !profile.is_registered) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-cream-dark/20">
+        <div className="w-full max-w-md animate-fade-in-up">
+          <div className="bg-white border border-border/80 rounded-3xl p-8 md:p-10 shadow-xl shadow-primary/5 relative overflow-hidden">
+            <div className="absolute -top-16 -right-16 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
+            <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-accent/5 rounded-full blur-2xl" />
+
+            <div className="relative">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
+                  <ShieldCheck className="w-8 h-8 stroke-[1.5]" />
+                </div>
+              </div>
+
+              <h1 className="text-2xl font-bold text-center text-foreground mb-2">
+                Kurs Kodini Kiriting
+              </h1>
+              <p className="text-muted text-center text-xs mb-6 leading-relaxed">
+                Salom, <span className="font-bold text-foreground">{profile.fullName || user.email}</span>! O'qishni boshlash uchun o'qituvchi tomonidan berilgan maxsus kurs kodini kiriting.
+              </p>
+
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-2" htmlFor="invite-code">
+                    Kurs kodi *
+                  </label>
+                  <input
+                    type="text"
+                    id="invite-code"
+                    required
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    placeholder="Masalan: CODA-XXXX"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-border/80 bg-cream/20 text-foreground text-sm uppercase font-semibold text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:normal-case placeholder:tracking-normal"
+                  />
+                </div>
+
+                {codeError && (
+                  <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-800 text-xs rounded-xl font-medium">
+                    {codeError}
+                  </div>
+                )}
+
+                {codeSuccess && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs rounded-xl font-medium">
+                    {codeSuccess}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={verifyingCode || !inviteCode.trim()}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 hover:shadow-lg disabled:opacity-50 cursor-pointer text-sm"
+                >
+                  {verifyingCode ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Kodni tekshirish...
+                    </>
+                  ) : (
+                    "Tizimga kirishga ruxsat berish"
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-6 pt-6 border-t border-border/60 text-center">
+                <p className="text-xs text-muted mb-3">Ushbu Google akkaunt sizga tegishli emasmi?</p>
+                <button
+                  onClick={() => signOut()}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/60 px-4 py-2.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  Tizimdan chiqish (Boshqa profil)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

@@ -90,19 +90,23 @@ const SECTIONS = [
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   const [tasks, setTasks] = useState([]);
   const [messages, setMessages] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Kirmagan foydalanuvchini login sahifasiga yo'naltirish
+  // Kirmagan yoki ro'yxatdan o'tmagan foydalanuvchini login sahifasiga yo'naltirish
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.replace("/login");
+      } else if (profile && !profile.is_registered) {
+        router.replace("/login");
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, profile, authLoading, router]);
 
   // Foydalanuvchi ma'lumotlarini yuklash (profil bilan bir xil manbalar)
   useEffect(() => {

@@ -14,8 +14,58 @@ import { supabase } from "@/lib/supabase";
 export function useAuth() {
   // Joriy foydalanuvchi (null = kirilmagan)
   const [user, setUser] = useState(null);
+  // Foydalanuvchi profili
+  const [profile, setProfile] = useState(null);
   // Yuklanmoqda (sahifa yangilanganda sessiyani tekshirayotgan vaqt)
   const [loading, setLoading] = useState(true);
+
+  // Profilni yuklash funksiyasi
+  const fetchProfile = async (u) => {
+    if (!supabase || !u) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", u.id)
+        .single();
+      if (!error && data) {
+        setProfile(data);
+      } else {
+        // Agar profil trigger orqali hali yaratilmagan bo'lsa, uni qo'lda yaratib olamiz
+        const { data: newProfile, error: insErr } = await supabase
+          .from("profiles")
+          .insert([
+            {
+              id: u.id,
+              email: u.email,
+              full_name: u.user_metadata?.full_name || u.user_metadata?.name || "Foydalanuvchi",
+              avatar_url: u.user_metadata?.avatar_url || u.user_metadata?.picture,
+              is_registered: false
+            }
+          ])
+          .select()
+          .single();
+        if (!insErr && newProfile) {
+          setProfile(newProfile);
+        } else {
+          setProfile(null);
+        }
+      }
+    } catch (e) {
+      setProfile(null);
+    }
+    setLoading(false);
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user);
+    }
+  };
 
   useEffect(() => {
     if (!supabase) {
@@ -25,15 +75,27 @@ export function useAuth() {
 
     // 1. Hozirgi sessiyani olish (sahifa yangilanganda)
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) {
+        fetchProfile(u);
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
     });
 
     // 2. Auth holatining o'zgarishini kuzatish (kirish/chiqish)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) {
+          fetchProfile(u);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
       }
     );
 
@@ -67,7 +129,8 @@ export function useAuth() {
     if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
+    setProfile(null);
   };
 
-  return { user, loading, signInWithGoogle, signOut };
+  return { user, profile, loading, refreshProfile, signInWithGoogle, signOut };
 }

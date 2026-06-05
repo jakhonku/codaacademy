@@ -85,7 +85,7 @@ const isSameDay = (a, b) =>
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading, signOut } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
 
   // Foydalanuvchiga tegishli ma'lumotlar
   const [tasks, setTasks] = useState([]);
@@ -99,12 +99,16 @@ export default function ProfilePage() {
   // Dars jadvali uchun ko'rilayotgan hafta boshi (dushanba)
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
 
-  // Foydalanuvchi kirmagan bo'lsa, login sahifasiga yo'naltirish
+  // Foydalanuvchi kirmagan yoki ro'yxatdan o'tmagan bo'lsa, login sahifasiga yo'naltirish
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/login");
+    if (!loading) {
+      if (!user) {
+        router.replace("/login");
+      } else if (profile && !profile.is_registered) {
+        router.replace("/login");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, profile, loading, router]);
 
   // Foydalanuvchi ma'lumotlarini yuklash
   useEffect(() => {

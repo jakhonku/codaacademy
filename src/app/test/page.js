@@ -44,14 +44,18 @@ import {
 export default function TestPage() {
   const router = useRouter();
   // Foydalanuvchi holati — faqat Google orqali kirganlar testlarni ko'radi
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
-  // Kirmagan foydalanuvchini login sahifasiga yo'naltirish
+  // Kirmagan yoki ro'yxatdan o'tmagan foydalanuvchini login sahifasiga yo'naltirish
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.replace("/login");
+      } else if (profile && !profile.is_registered) {
+        router.replace("/login");
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, profile, authLoading, router]);
 
   // ============================================
   // HOLATLAR
@@ -167,8 +171,8 @@ export default function TestPage() {
                 }
               }
 
-              return { 
-                ...quiz, 
+              return {
+                ...quiz,
                 questionCount: count || 0,
                 leaders: uniqueLeaders.slice(0, 3)
               };
@@ -219,10 +223,10 @@ export default function TestPage() {
           if (existing.attempt_count >= 3) {
             const lastAttempt = new Date(existing.last_attempt_at);
             const now = new Date();
-            
+
             const isToday = lastAttempt.getFullYear() === now.getFullYear() &&
-                            lastAttempt.getMonth() === now.getMonth() &&
-                            lastAttempt.getDate() === now.getDate();
+              lastAttempt.getMonth() === now.getMonth() &&
+              lastAttempt.getDate() === now.getDate();
 
             if (isToday) {
               const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -359,10 +363,10 @@ export default function TestPage() {
           const uniqueLeaders = [];
           const seenNames = new Set();
           for (const l of leadersData) {
-             if (!seenNames.has(l.full_name)) {
-                uniqueLeaders.push(l);
-                seenNames.add(l.full_name);
-             }
+            if (!seenNames.has(l.full_name)) {
+              uniqueLeaders.push(l);
+              seenNames.add(l.full_name);
+            }
           }
           setDailyLeaders(uniqueLeaders.slice(0, 3));
         }
@@ -639,8 +643,8 @@ export default function TestPage() {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {quiz.leaders.map((leader, lIdx) => (
-                          <div 
-                            key={lIdx} 
+                          <div
+                            key={lIdx}
                             className="flex items-center gap-1.5 bg-cream/80 px-2.5 py-1 rounded-xl text-xs font-medium text-foreground border border-border/40"
                           >
                             <span className="text-sm">
@@ -708,11 +712,10 @@ export default function TestPage() {
                 </span>
               </div>
               <div
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold ${
-                  timeWarning
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold ${timeWarning
                     ? "bg-rose-50 text-rose-600 border border-rose-200 animate-pulse-slow"
                     : "bg-primary/5 text-primary border border-primary/10"
-                }`}
+                  }`}
               >
                 <Timer className="w-4 h-4" />
                 {formatTime(timeLeft)}
@@ -753,25 +756,22 @@ export default function TestPage() {
                   <button
                     key={opt.key}
                     onClick={() => selectAnswer(q.id, opt.key)}
-                    className={`w-full text-left flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 cursor-pointer group ${
-                      isSelected
+                    className={`w-full text-left flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 cursor-pointer group ${isSelected
                         ? "border-primary bg-primary/5 shadow-sm"
                         : "border-border/40 hover:border-primary/30 hover:bg-cream/30"
-                    }`}
+                      }`}
                   >
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 transition-all duration-200 ${
-                        isSelected
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 transition-all duration-200 ${isSelected
                           ? "bg-primary text-white"
                           : "bg-cream-dark text-muted group-hover:bg-primary/10 group-hover:text-primary"
-                      }`}
+                        }`}
                     >
                       {opt.key}
                     </div>
                     <span
-                      className={`text-sm font-medium ${
-                        isSelected ? "text-foreground" : "text-muted group-hover:text-foreground"
-                      }`}
+                      className={`text-sm font-medium ${isSelected ? "text-foreground" : "text-muted group-hover:text-foreground"
+                        }`}
                     >
                       {opt.text}
                     </span>
@@ -828,13 +828,12 @@ export default function TestPage() {
                       setCurrentQuestion(idx);
                       setSelectedOption(answers[q.id] || null);
                     }}
-                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      isCurrent
+                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer ${isCurrent
                         ? "bg-primary text-white shadow-sm"
                         : isAnswered
-                        ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                        : "bg-cream-dark text-muted hover:bg-cream border border-border/40"
-                    }`}
+                          ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                          : "bg-cream-dark text-muted hover:bg-cream border border-border/40"
+                      }`}
                   >
                     {idx + 1}
                   </button>
@@ -1003,11 +1002,10 @@ export default function TestPage() {
                     {dailyLeaders.map((leader, idx) => (
                       <div key={idx} className="flex items-center justify-between bg-cream/30 p-2.5 rounded-xl border border-border/30">
                         <div className="flex items-center gap-3">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                            idx === 0 ? "bg-amber-100 text-amber-700" :
-                            idx === 1 ? "bg-slate-100 text-slate-700" :
-                            "bg-orange-50 text-orange-700"
-                          }`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? "bg-amber-100 text-amber-700" :
+                              idx === 1 ? "bg-slate-100 text-slate-700" :
+                                "bg-orange-50 text-orange-700"
+                            }`}>
                             {idx + 1}
                           </div>
                           <span className="text-sm font-medium text-foreground line-clamp-1">{leader.full_name}</span>

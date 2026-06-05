@@ -17,7 +17,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import staticPrompts from "@/data/prompts";
 import staticResources from "@/data/resources";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, Key } from "lucide-react";
 
 // Ikonkalar
 import {
@@ -65,6 +65,7 @@ export default function AdminPage() {
   const [userMessages, setUserMessages] = useState([]); // Foydalanuvchi xabarlari
   const [lessons, setLessons] = useState([]);      // Dars jadvali
   const [quizzes, setQuizzes] = useState([]);       // Testlar
+  const [inviteCodes, setInviteCodes] = useState([]); // Kurs kodlari
   const [loading, setLoading] = useState(true);
 
   // Quiz (Test) modal holati
@@ -277,6 +278,17 @@ export default function AdminPage() {
         } else {
           setQuizzes([]);
         }
+
+        // 9. Kurs kodlari (invite_codes)
+        const { data: icData, error: icErr } = await supabase
+          .from("invite_codes")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (!icErr && icData) {
+          setInviteCodes(icData);
+        } else {
+          setInviteCodes([]);
+        }
       } catch (err) {
         console.error("Supabase ma'lumotlarni yuklashda xatolik:", err);
         // Fallback
@@ -287,7 +299,7 @@ export default function AdminPage() {
       // Lokal ma'lumotlar
       setPrompts(staticPrompts);
       setResources(staticResources);
-      
+
       try {
         const localRegs = JSON.parse(localStorage.getItem("offline_registrations") || "[]");
         setRegistrations(localRegs.map(item => ({
@@ -296,7 +308,7 @@ export default function AdminPage() {
           phone: item.phone,
           department: item.department,
           createdAt: item.created_at
-        })).sort((a,b) => b.id - a.id));
+        })).sort((a, b) => b.id - a.id));
       } catch (e) {
         setRegistrations([]);
       }
@@ -376,7 +388,7 @@ export default function AdminPage() {
   const seedPrompts = async () => {
     if (!supabase) return;
     if (!confirm("Haqiqatan ham barcha 41 ta namunaviy prompt shablonlarini ma'lumotlar bazasiga yuklamoqchimisiz?")) return;
-    
+
     setLoading(true);
     try {
       const payloads = staticPrompts.map(p => ({
@@ -700,6 +712,43 @@ export default function AdminPage() {
     }
   };
 
+  // ============================================
+  // KURS KODLARI AMALLARI (Invite Codes)
+  // ============================================
+  const generateInviteCode = async () => {
+    if (!supabase) {
+      showNotice("Supabase sozlanmagan", "error");
+      return;
+    }
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let randomPart = "";
+    for (let i = 0; i < 5; i++) {
+      randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const newCode = `CODA-${randomPart}`;
+    try {
+      const { error } = await supabase.from("invite_codes").insert([{ code: newCode }]);
+      if (error) throw error;
+      showNotice(`Yangi kurs kodi yaratildi: ${newCode}`);
+      loadAllData();
+    } catch (err) {
+      showNotice("Kurs kodi yaratishda xato: " + err.message, "error");
+    }
+  };
+
+  const deleteInviteCode = async (id) => {
+    if (!confirm("Haqiqatan ham ushbu kurs kodini o'chirmoqchimisiz?")) return;
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.from("invite_codes").delete().eq("id", id);
+      if (error) throw error;
+      showNotice("Kurs kodi o'chirildi.");
+      loadAllData();
+    } catch (err) {
+      showNotice("Xatolik: " + err.message, "error");
+    }
+  };
+
   // Foydalanuvchi nomini ID orqali olish (vazifa/xabarlarda ko'rsatish uchun)
   const getUserName = (userId) => {
     if (!userId) return "Barcha foydalanuvchilar";
@@ -801,7 +850,7 @@ export default function AdminPage() {
   const saveResource = async (e) => {
     e.preventDefault();
     const isEdit = currentResource.id !== null;
-    
+
     const isGroup = currentResource.type === "group";
     const finalUrl = isGroup ? "" : (currentResource.url || "");
     const finalFileSize = isGroup ? null : (currentResource.fileSize || null);
@@ -878,9 +927,9 @@ export default function AdminPage() {
   const getStructuredResources = () => {
     const groups = resources.filter(r => r.type === "group");
     const orphans = resources.filter(r => r.type !== "group" && !r.parentId);
-    
+
     const structured = [];
-    
+
     // Har bir guruh va uning bolalarini qo'shamiz
     groups.forEach(group => {
       structured.push({ ...group, isGroupParent: true });
@@ -889,12 +938,12 @@ export default function AdminPage() {
         structured.push({ ...child, isGroupChild: true, parentTitle: group.title });
       });
     });
-    
+
     // Guruhga kirmaganlarni qo'shamiz
     orphans.forEach(orphan => {
       structured.push(orphan);
     });
-    
+
     return structured;
   };
 
@@ -953,14 +1002,13 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-cream py-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Floating Notification */}
         {notification && (
-          <div className={`fixed top-20 right-6 z-50 flex items-center gap-2 p-4 rounded-2xl border shadow-lg animate-fade-in-left ${
-            notification.type === 'error' 
-              ? 'bg-rose-50 border-rose-200 text-rose-800' 
+          <div className={`fixed top-20 right-6 z-50 flex items-center gap-2 p-4 rounded-2xl border shadow-lg animate-fade-in-left ${notification.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
               : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          }`}>
+            }`}>
             <CheckCircle className={`w-5 h-5 ${notification.type === 'error' ? 'text-rose-600' : 'text-emerald-600'}`} />
             <span className="text-sm font-semibold">{notification.text}</span>
           </div>
@@ -999,11 +1047,10 @@ export default function AdminPage() {
         <div className="flex flex-wrap gap-2 mb-8 bg-white/60 p-1.5 rounded-2xl border border-border/40 inline-flex">
           <button
             onClick={() => setActiveTab("prompts")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "prompts"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "prompts"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <Lightbulb className="w-4 h-4" />
             Promptlar
@@ -1011,11 +1058,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("resources")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "resources"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "resources"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <FileText className="w-4 h-4" />
             Resurslar
@@ -1023,11 +1069,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("registrations")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "registrations"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "registrations"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <Users className="w-4 h-4" />
             Oflayn ariza ({registrations.length})
@@ -1035,11 +1080,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("users")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "users"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "users"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <UserCircle className="w-4 h-4" />
             Foydalanuvchilar ({users.length})
@@ -1047,11 +1091,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("tasks")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "tasks"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "tasks"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <ClipboardList className="w-4 h-4" />
             Vazifalar ({userTasks.length})
@@ -1059,11 +1102,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("messages")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "messages"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "messages"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <MessageSquare className="w-4 h-4" />
             Xabarlar ({userMessages.length})
@@ -1071,11 +1113,10 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("lessons")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "lessons"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "lessons"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <CalendarDays className="w-4 h-4" />
             Dars jadvali ({lessons.length})
@@ -1083,14 +1124,24 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab("quizzes")}
-            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-              activeTab === "quizzes"
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "quizzes"
                 ? "bg-primary text-white shadow-sm"
                 : "text-muted hover:text-foreground hover:bg-cream-dark"
-            }`}
+              }`}
           >
             <ClipboardCheck className="w-4 h-4" />
             Testlar ({quizzes.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("invite_codes")}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "invite_codes"
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted hover:text-foreground hover:bg-cream-dark"
+              }`}
+          >
+            <Key className="w-4 h-4" />
+            Kurs kodlari ({inviteCodes.length})
           </button>
         </div>
 
@@ -1102,7 +1153,7 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="bg-white border border-border/40 rounded-3xl shadow-sm overflow-hidden">
-            
+
             {/* ============================================
                 TAB 1: PROMPTLAR boshqaruvi
                 ============================================ */}
@@ -1243,12 +1294,11 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                              r.type === 'group' ? 'bg-indigo-100 text-indigo-800' :
-                              r.type === 'pdf' ? 'bg-rose-100 text-rose-800' :
-                              r.type === 'video' ? 'bg-blue-100 text-blue-800' :
-                              'bg-emerald-100 text-emerald-800'
-                            }`}>
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${r.type === 'group' ? 'bg-indigo-100 text-indigo-800' :
+                                r.type === 'pdf' ? 'bg-rose-100 text-rose-800' :
+                                  r.type === 'video' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-emerald-100 text-emerald-800'
+                              }`}>
                               {r.type === 'group' ? 'MODUL' : r.type.toUpperCase()}
                             </span>
                           </td>
@@ -1839,6 +1889,87 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* ============================================
+                TAB 8: KURS KODLARI boshqaruvi
+                ============================================ */}
+            {activeTab === "invite_codes" && (
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">Kurs Kodlari Boshqaruvi</h2>
+                    <p className="text-muted text-xs">Taklif etish va Google orqali ro'yxatdan o'tishni cheklash kodlari.</p>
+                  </div>
+                  <button
+                    onClick={generateInviteCode}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Yangi Kod Yaratish
+                  </button>
+                </div>
+
+                {inviteCodes.length === 0 ? (
+                  <div className="text-center py-16 text-muted">
+                    <Key className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="font-semibold text-foreground mb-1">Hali kodlar yaratilmagan</p>
+                    <p className="text-sm">Yangi taklif kodlarini yaratish uchun yuqoridagi tugmani bosing.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border/80 text-muted font-semibold text-xs uppercase tracking-wider">
+                          <th className="py-4 px-4">Kurs Kodi</th>
+                          <th className="py-4 px-4 text-center">Holati</th>
+                          <th className="py-4 px-4 text-center">Ishlatgan Foydalanuvchi</th>
+                          <th className="py-4 px-4 text-right">Ishlatilgan Vaqt</th>
+                          <th className="py-4 px-4 text-right">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {inviteCodes.map((ic) => (
+                          <tr key={ic.id} className="hover:bg-cream/20">
+                            <td className="py-4 px-4 font-mono font-bold text-foreground text-sm uppercase tracking-wider">
+                              {ic.code}
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${ic.is_used
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-emerald-100 text-emerald-700"
+                                }`}>
+                                {ic.is_used ? "Ishlatilgan" : "Faol (Kutilmoqda)"}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center text-xs font-semibold text-muted">
+                              {ic.used_by_email || "-"}
+                            </td>
+                            <td className="py-4 px-4 text-right text-xs text-muted">
+                              {ic.used_at ? new Date(ic.used_at).toLocaleString("uz-UZ", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              }) : "-"}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <button
+                                onClick={() => deleteInviteCode(ic.id)}
+                                className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                                title="Kodni o'chirish"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </div>
@@ -1961,11 +2092,11 @@ export default function AdminPage() {
                   <label className="block text-xs font-semibold text-foreground mb-1">Turi *</label>
                   <select
                     value={currentResource.type}
-                    onChange={(e) => setCurrentResource({ 
-                      ...currentResource, 
-                      type: e.target.value, 
+                    onChange={(e) => setCurrentResource({
+                      ...currentResource,
+                      type: e.target.value,
                       // Agar guruh bo'lsa parentId ni o'chiramiz
-                      parentId: e.target.value === 'group' ? null : currentResource.parentId 
+                      parentId: e.target.value === 'group' ? null : currentResource.parentId
                     })}
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-cream/10 text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                   >
@@ -2019,11 +2150,10 @@ export default function AdminPage() {
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 cursor-pointer ${
-                      isDragging
+                    className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 cursor-pointer ${isDragging
                         ? "border-primary bg-primary/5 scale-[1.02]"
                         : "border-border/60 bg-cream/10 hover:border-primary/40 hover:bg-cream/30"
-                    }`}
+                      }`}
                     onClick={() => document.getElementById("file-upload-input").click()}
                   >
                     <input
@@ -2543,11 +2673,10 @@ export default function AdminPage() {
                           </div>
                           <div className="grid grid-cols-2 gap-1.5">
                             {["A", "B", "C", "D"].map((opt) => (
-                              <span key={opt} className={`text-xs px-2.5 py-1.5 rounded-lg ${
-                                q.correct_answer === opt
+                              <span key={opt} className={`text-xs px-2.5 py-1.5 rounded-lg ${q.correct_answer === opt
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
                                   : "bg-white text-muted border border-border/40"
-                              }`}>
+                                }`}>
                                 {opt}: {q[`option_${opt.toLowerCase()}`]}
                                 {q.correct_answer === opt && " ✓"}
                               </span>
@@ -2643,11 +2772,10 @@ export default function AdminPage() {
                               {p.score} / {p.total_questions}
                             </td>
                             <td className="py-4 px-4 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                pct >= 80 ? "bg-emerald-100 text-emerald-700" :
-                                pct >= 60 ? "bg-amber-100 text-amber-700" :
-                                "bg-rose-100 text-rose-700"
-                              }`}>
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${pct >= 80 ? "bg-emerald-100 text-emerald-700" :
+                                  pct >= 60 ? "bg-amber-100 text-amber-700" :
+                                    "bg-rose-100 text-rose-700"
+                                }`}>
                                 {pct}%
                               </span>
                             </td>

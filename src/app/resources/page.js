@@ -16,14 +16,14 @@ import staticResources from "@/data/resources";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import {
-  Loader2, 
-  Folder, 
-  FileText, 
-  Video, 
-  ExternalLink, 
-  Download, 
-  ChevronDown, 
-  ChevronUp, 
+  Loader2,
+  Folder,
+  FileText,
+  Video,
+  ExternalLink,
+  Download,
+  ChevronDown,
+  ChevronUp,
   BookOpen,
   Play
 } from "lucide-react";
@@ -31,18 +31,22 @@ import {
 export default function ResourcesPage() {
   const router = useRouter();
   // Foydalanuvchi holati — faqat Google orqali kirganlar resurslarni ko'radi
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedModules, setExpandedModules] = useState({});
 
-  // Kirmagan foydalanuvchini login sahifasiga yo'naltirish
+  // Kirmagan yoki ro'yxatdan o'tmagan foydalanuvchini login sahifasiga yo'naltirish
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login");
+    if (!authLoading) {
+      if (!user) {
+        router.replace("/login");
+      } else if (profile && !profile.is_registered) {
+        router.replace("/login");
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, profile, authLoading, router]);
 
   // Resurslarni yuklash (faqat foydalanuvchi kirgan bo'lsa)
   useEffect(() => {
@@ -149,7 +153,7 @@ export default function ResourcesPage() {
           </div>
         ) : (
           <div className="space-y-16">
-            
+
             {/* ============================================
                 1. O'QUV MODULLARI (GURUHLAR)
                 ============================================ */}
@@ -173,12 +177,12 @@ export default function ResourcesPage() {
                     const isExpanded = !!expandedModules[module.id];
 
                     return (
-                      <div 
-                        key={module.id} 
+                      <div
+                        key={module.id}
                         className="bg-white border border-border/40 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
                       >
                         {/* Modul Header */}
-                        <div 
+                        <div
                           onClick={() => toggleModule(module.id)}
                           className="p-6 md:p-8 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-cream/[0.15] transition-colors"
                         >
@@ -224,8 +228,8 @@ export default function ResourcesPage() {
                                   const BtnIcon = childConfig.btnIcon;
 
                                   return (
-                                    <div 
-                                      key={child.id} 
+                                    <div
+                                      key={child.id}
                                       className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-cream/10 rounded-2xl md:px-4 -mx-2 md:-mx-4 transition-colors"
                                     >
                                       <div className="flex items-start gap-3.5">
@@ -328,8 +332,8 @@ export default function ResourcesPage() {
             Qo'shimcha yordam kerakmi? 📚
           </h3>
           <p className="text-muted max-w-2xl mx-auto text-sm leading-relaxed">
-            Agar biror mavzu bo'yicha qo'shimcha material kerak bo'lsa yoki 
-            savollaringiz bo'lsa, bizga murojaat qilishingiz mumkin. 
+            Agar biror mavzu bo'yicha qo'shimcha material kerak bo'lsa yoki
+            savollaringiz bo'lsa, bizga murojaat qilishingiz mumkin.
             Yangi resurslar muntazam ravishda qo'shib boriladi.
           </p>
         </div>
